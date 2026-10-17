@@ -108,7 +108,7 @@ npm run build              # Windows → dist/stakk.exe
 npm run build:mac:cross    # macOS (depuis Windows), voir MAC.md
 ```
 
-Le workflow GitHub Actions [build.yml](.github/workflows/build.yml) teste et compile l'exe Windows à chaque push sur `main` (zip en artefact du run). Pousser un tag `vX.Y.Z` publie en plus le zip dans une release GitHub.
+Le workflow GitHub Actions [build.yml](.github/workflows/build.yml) teste et compile l'exe Windows à chaque push sur `main` et publie le zip dans la release `v<version de package.json>` : créée au premier build d'une version, son zip est remplacé aux builds suivants. Pour sortir une nouvelle release, monte la version dans `package.json`.
 
 ## Tests
 
