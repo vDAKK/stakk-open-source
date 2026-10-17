@@ -1,0 +1,1335 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>STAKK Overlay</title>
+  <style>
+    /* ─── Palette Dofus 3 ──────────────────────────────────────────────
+       Bleu marine profond du HUD (panneaux quête/chat), jaune doré des
+       éléments mis en avant (niveau de zone, noms cliquables, minimap
+       actif), rouge brique de la barre de vie, texte blanc cassé.
+       Tout en rgba pour conserver la transparence de l'overlay. */
+    :root {
+      --panel-bg:      rgba(28, 32, 58, 0.88);
+      --panel-bg-alt:  rgba(22, 26, 48, 0.92);
+      --panel-border:  rgba(12, 14, 28, 0.95);
+      --panel-hi:      rgba(255, 255, 255, 0.05);
+      --gold:          #f5c042;
+      --gold-soft:     #ffd566;
+      --gold-glow:     rgba(245, 192, 66, 0.55);
+      --gold-bg:       rgba(245, 192, 66, 0.14);
+      --text:          #eef1f8;
+      --text-dim:      #a8adc2;
+      --red:           #e24848;
+      --radius:        6px;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      background: transparent;
+      color: var(--text);
+      font-family: 'Segoe UI', 'Open Sans', system-ui, sans-serif;
+      font-size: 10px;
+      user-select: none;
+      overflow: hidden;
+      cursor: default;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Cadre minimap Dofus : bordure solide #32354c (navy slate), arrondi
+       minimal 2px pour coller à l'esthétique angular du HUD. */
+    #panel {
+      position: absolute;
+      inset: 3px;
+      padding: 9px;
+      box-sizing: border-box;
+      background: rgba(14, 18, 36, 0.92);
+      border: 3px solid #32354c;
+      border-radius: 2px;
+      box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, 0.85),
+        0 0 0 1px rgba(0, 0, 0, 0.85),
+        0 4px 10px rgba(0, 0, 0, 0.6);
+    }
+    #grid {
+      position: relative; /* ancrage de #routeSvg en absolute */
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 2px;
+      background: transparent;
+    }
+    /* SVG des flèches de trajet, par-dessus la grille mais pointer-events
+       none pour ne pas bloquer click-to-copy /travel ni le drag. */
+    #routeSvg {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+      z-index: 10;
+      overflow: visible;
+    }
+    .cell {
+      position: relative;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      /* Au lieu d'assombrir sur fond déjà sombre, on applique un léger voile
+         CLAIR — cellules visibles sans clasher avec le fond navy. */
+      background: rgba(255, 255, 255, 0.05);
+      box-sizing: border-box;
+      overflow: hidden;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      /* row-gap plus grand que column-gap pour que le .count (qui déborde
+         de .res en bottom/right) ne chevauche pas l'icône de la ligne suivante */
+      column-gap: 2px;
+      row-gap: 7px;
+      padding: 3px 3px 5px;
+      min-width: 0;
+      min-height: 0;
+      transition: background 80ms, border-color 80ms;
+      /* Empêche HTML5 native drag : sans ça, mousedown sur une .res img déclenche
+         un dragstart qui montre un ghost flottant top-right puis revient → bug
+         visuel "la case saute" au début du drag-to-pan. */
+      -webkit-user-drag: none;
+      user-drag: none;
+    }
+    .res, .res img { -webkit-user-drag: none; user-drag: none; }
+    .cell.alt { background: rgba(255, 255, 255, 0.08); }
+    .cell.center {
+      border-color: var(--gold);
+      background: rgba(245, 192, 66, 0.16);
+      box-shadow:
+        inset 0 0 0 1px rgba(245, 192, 66, 0.35),
+        0 0 6px var(--gold-glow);
+      z-index: 2;
+    }
+    /* Hover léger : léger halo doré, pas d'effet "lourd" qui fait flasher */
+    .cell[data-clickable="1"] { cursor: pointer; }
+    .cell[data-clickable="1"]:hover {
+      border-color: rgba(245, 192, 66, 0.6);
+      background: rgba(245, 192, 66, 0.12);
+    }
+    .cell.copied {
+      background: rgba(26, 188, 156, 0.28) !important;
+      border-color: #1abc9c !important;
+    }
+    .cell.empty-cell { opacity: 0.7; }
+    .cell.empty-cell::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 3px;
+      height: 3px;
+      margin: -1.5px 0 0 -1.5px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .cell.center.empty-cell::before {
+      background: var(--gold-soft);
+      width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
+      box-shadow: 0 0 4px var(--gold-glow);
+    }
+    /* Cells sans map dofusdb = infranchissable. Hachures rouges. */
+    .cell.no-map {
+      background:
+        repeating-linear-gradient(45deg,
+          transparent 0 4px,
+          rgba(231, 76, 60, 0.20) 4px 8px),
+        rgba(0, 0, 0, 0.3) !important;
+      border-color: rgba(231, 76, 60, 0.40) !important;
+    }
+    .cell.no-map.center {
+      background:
+        repeating-linear-gradient(45deg,
+          transparent 0 4px,
+          rgba(231, 76, 60, 0.20) 4px 8px),
+        rgba(245, 192, 66, 0.16) !important;
+    }
+    .res {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      /* mini-slot façon inventaire Dofus autour de chaque icône */
+      padding: 1px;
+      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.25);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    }
+    .res img {
+      width: 18px;
+      height: 18px;
+      display: block;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.95));
+      image-rendering: -webkit-optimize-contrast;
+    }
+    .res .count {
+      position: absolute;
+      bottom: -4px;
+      right: -3px;
+      min-width: 10px;
+      height: 11px;
+      padding: 0 2px;
+      box-sizing: border-box;
+      font-size: 9px;
+      font-weight: 700;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid var(--gold-soft);
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      pointer-events: none;
+      letter-spacing: -0.3px;
+      text-shadow: 0 1px 0 #000;
+    }
+    .coord {
+      position: absolute;
+      top: 1px;
+      left: 3px;
+      font-size: 8px;
+      color: var(--text-dim);
+      pointer-events: none;
+      display: none;
+      text-shadow: 0 0 2px rgba(0,0,0,0.95);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    body.edit .coord { display: block; }
+    body.edit #grid { background: rgba(12, 14, 28, 0.35); }
+    body.edit .cell {
+      border-color: rgba(245, 192, 66, 0.55);
+      -webkit-app-region: drag;
+    }
+    body.edit .cell.center { border-color: var(--gold); }
+    #status {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      right: 6px;
+      padding: 4px 10px;
+      background: var(--panel-bg-alt);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      box-shadow:
+        inset 0 1px 0 var(--panel-hi),
+        0 2px 4px rgba(0, 0, 0, 0.5);
+      color: var(--text-dim);
+      font-size: 9px;
+      font-weight: 500;
+      pointer-events: none;
+      display: none;
+      z-index: 50;
+      letter-spacing: 0.2px;
+    }
+    body.edit #status { display: block; }
+
+    /* Bouton "vue étendue" : bascule vers le grid scrollable pour voir
+       où sont les ressources dans la zone façon dofusdb. Coin haut-droit. */
+    #bigMapBtn {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 2px;
+      color: #eef1f8;
+      font-size: 11px;
+      font-family: inherit;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 80ms, border-color 80ms;
+    }
+    #bigMapBtn:hover {
+      background: rgba(245, 192, 66, 0.25);
+      border-color: var(--gold);
+    }
+    body.big-map #bigMapBtn { background: rgba(245, 192, 66, 0.35); border-color: var(--gold); }
+    /* SVG inline dans les boutons overlay : 12px, stroke courrant */
+    #bigMapBtn svg, #plannerBtn svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* Vue étendue : grid cells à taille fixe, container scrollable dans le
+       panel. Cellules 36x36 pour voir icones + compteur confortablement.
+       Curseur grab/grabbing = feedback visuel pour le drag-to-pan. */
+    body.big-map #grid {
+      overflow: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(245, 192, 66, 0.4) rgba(0, 0, 0, 0.3);
+      cursor: grab;
+    }
+    body.big-map #grid.dragging { cursor: grabbing; }
+    body.big-map #grid.dragging .cell { cursor: grabbing; }
+    body.big-map #grid::-webkit-scrollbar { width: 6px; height: 6px; }
+    body.big-map #grid::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
+    body.big-map #grid::-webkit-scrollbar-thumb { background: rgba(245, 192, 66, 0.4); border-radius: 3px; }
+    body.big-map .cell {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      min-height: 36px;
+    }
+
+    /* Dropdown de choix de trajet : top-left du panel, compact. Le <select>
+       native est un dropdown OS qui marche sans click-through tant que
+       l'overlay a windowHovered=true au moment du click (cf updateTitle). */
+    #routeSel {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      height: 18px;
+      max-width: 110px;
+      padding: 0 2px;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 2px;
+      color: #eef1f8;
+      font-size: 10px;
+      font-family: inherit;
+      line-height: 1;
+      outline: none;
+      cursor: pointer;
+      z-index: 30;
+    }
+    #routeSel:hover { background: rgba(26, 188, 156, 0.25); border-color: var(--gold); }
+    #routeSel option { background: #1c203a; color: #eef1f8; }
+
+    /* Second bouton carré (📋) à côté de ⛶, même style */
+    #plannerBtn {
+      position: absolute;
+      top: 3px;
+      right: 24px;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 2px;
+      color: #eef1f8;
+      font-size: 10px;
+      font-family: inherit;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 80ms, border-color 80ms;
+    }
+    #plannerBtn:hover {
+      background: rgba(26, 188, 156, 0.35);
+      border-color: var(--gold);
+    }
+
+    /* Waypoints : pas de highlight cell, le tracé visuel se fait via les
+       flèches SVG par-dessus. Subtle outline pour distinguer. */
+    .cell.waypoint { border-color: rgba(26, 188, 156, 0.45); }
+    /* Banner dans la vue normale (pas big-map) quand un trajet est actif :
+       affiche "Étape X/Y" et la direction vers le next waypoint. */
+    #routeBanner {
+      position: absolute;
+      top: 3px;
+      left: 24px;
+      right: 24px;
+      padding: 2px 6px;
+      background: rgba(26, 188, 156, 0.85);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+      text-align: center;
+      z-index: 35;
+      display: none;
+      pointer-events: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    body.big-map #routeBanner { display: none !important; }
+
+    /* Filter bar — panneau horizontal ancré en haut façon toolbar Dofus.
+       Visible en mode filtre (Ctrl+Shift+F), permet de toggler les types
+       affichés. */
+    #filterBar {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      right: 6px;
+      padding: 6px 10px;
+      background: var(--panel-bg-alt);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      box-shadow:
+        inset 0 1px 0 var(--panel-hi),
+        0 4px 12px rgba(0, 0, 0, 0.5);
+      display: none;
+      gap: 5px;
+      flex-wrap: wrap;
+      align-items: center;
+      z-index: 60;
+      max-height: calc(100% - 12px);
+      overflow-y: auto;
+    }
+    body.filter-mode #filterBar { display: flex; }
+    #filterBar .lbl {
+      color: var(--gold);
+      font-size: 10px;
+      margin-right: 6px;
+      white-space: nowrap;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+    }
+    #filterBar .filter-item {
+      width: 22px;
+      height: 22px;
+      cursor: pointer;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.3);
+      box-shadow: inset 0 1px 0 var(--panel-hi);
+      transition: transform 80ms, border-color 80ms, box-shadow 80ms;
+      position: relative;
+      padding: 1px;
+    }
+    #filterBar .filter-item:hover {
+      transform: translateY(-1px);
+      border-color: var(--gold);
+      box-shadow:
+        inset 0 1px 0 var(--panel-hi),
+        0 0 6px var(--gold-glow);
+    }
+    #filterBar .filter-item.off {
+      opacity: 0.4;
+      filter: grayscale(85%);
+    }
+    #filterBar .filter-item.off::after {
+      content: '✕';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--red);
+      font-size: 14px;
+      font-weight: 700;
+      text-shadow: 0 0 2px #000, 0 1px 0 #000;
+      pointer-events: none;
+    }
+    /* Tooltip façon info-bulle Dofus : panneau sombre, liseré doré fin,
+       premier mot en doré via ligne d'en-tête. */
+    #tooltip {
+      position: fixed;
+      pointer-events: none;
+      background: var(--panel-bg-alt);
+      color: var(--text);
+      padding: 5px 9px;
+      border-radius: var(--radius);
+      border: 1px solid var(--panel-border);
+      box-shadow:
+        inset 0 1px 0 var(--panel-hi),
+        inset 0 0 0 1px rgba(245, 192, 66, 0.15),
+        0 4px 10px rgba(0, 0, 0, 0.6);
+      font-size: 11px;
+      line-height: 1.45;
+      max-width: 230px;
+      white-space: pre-wrap;
+      z-index: 100;
+      display: none;
+      font-weight: 500;
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+    }
+    /* diagBar : visible uniquement tant qu'aucun perso n'est lié à l'overlay
+       (body sans classe `.connected`). Dès qu'on reçoit un mapId valide, on
+       ajoute .connected sur le body et la barre disparaît — plus de pollution
+       visuelle quand tout marche. */
+    #diagBar {
+      position: absolute;
+      bottom: 4px;
+      left: 4px;
+      right: 4px;
+      padding: 3px 8px;
+      background: rgba(20, 24, 44, 0.92);
+      border: 1px solid rgba(8, 10, 22, 0.95);
+      border-radius: 5px;
+      box-shadow: inset 0 0 0 1px rgba(245, 192, 66, 0.15);
+      color: var(--red);
+      font-size: 9px;
+      font-family: 'Consolas', 'Fira Code', monospace;
+      z-index: 200;
+      pointer-events: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: 0.2px;
+    }
+    body.connected #diagBar { display: none; }
+    /* Toast confirmation de copie : slide-in depuis le haut, s'efface tout seul */
+    #toast {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      padding: 5px 12px;
+      background: linear-gradient(180deg,
+        rgba(26, 188, 156, 0.95) 0%,
+        rgba(22, 160, 133, 0.95) 100%);
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      border-radius: 6px;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        0 4px 10px rgba(0, 0, 0, 0.5);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      z-index: 300;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 140ms, transform 140ms;
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+      white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <script src="i18n.js"></script>
+  <div id="panel">
+    <select id="routeSel">
+      <option value=""></option>
+    </select>
+    <button id="bigMapBtn">
+      <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+    </button>
+    <button id="plannerBtn">
+      <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    </button>
+    <div id="routeBanner"></div>
+    <div id="grid"><svg id="routeSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  </div>
+  <div id="filterBar"></div>
+  <div id="status"></div>
+  <div id="diagBar"></div>
+  <div id="tooltip"></div>
+  <div id="toast"></div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const STAKK_URL = params.get('stakkUrl') || 'http://127.0.0.1:3000';
+
+    // ─── i18n ────────────────────────────────────────────────────────────
+    // La langue vient de l'UI STAKK via /api/overlay/lang (origines
+    // différentes → localStorage non partagé). applyStaticI18n() repeint les
+    // libellés statiques ; le reste passe par I18N.t() au moment du rendu.
+    const I18N = window.STAKK_I18N;
+    const tr = (k, v) => I18N.t(k, v);
+    function applyStaticI18n() {
+      const sel = document.getElementById('routeSel');
+      if (sel) {
+        sel.title = tr('routeSelTitle');
+        const first = sel.querySelector('option[value=""]');
+        if (first) first.textContent = tr('routePlaceholder');
+      }
+      const big = document.getElementById('bigMapBtn');
+      if (big) {
+        big.title = bigMap ? tr('bigMapOff') : tr('bigMapOn');
+        big.setAttribute('aria-label', big.title);
+      }
+      const plan = document.getElementById('plannerBtn');
+      if (plan) {
+        plan.title = tr('openPlanner');
+        plan.setAttribute('aria-label', tr('openPlannerShort'));
+      }
+      const st = document.getElementById('status');
+      if (st) st.textContent = tr('statusBar');
+    }
+    I18N.onChange(() => {
+      applyStaticI18n();
+      populateRouteSel();
+      if (lastData) { renderGrid(lastData); renderFilterBar(lastData); }
+    });
+    I18N.autoSync(STAKK_URL, 5000);
+    const grid = document.getElementById('grid');
+    const tooltip = document.getElementById('tooltip');
+
+    let radius = 1;       // effective radius used for rendering
+    let normalRadius = 1; // radius set by user via hotkeys (1 = 3x3 … 3 = 7x7)
+    let bigMap = false;   // toggle via bouton : vue étendue scrollable
+    const BIG_MAP_INITIAL_RADIUS = 10;   // 21x21 = 441 cells (fast initial load)
+    const BIG_MAP_STEP = 5;              // +5 par expansion auto
+    const BIG_MAP_MAX_RADIUS = 50;       // 101x101 = 10201 cells cap (route planner)
+    const EDGE_THRESHOLD_CELLS = 3;      // si scroll dans 3 cells d'un bord → expand
+    const CELL_SIZE = 36;
+    const CELL_GAP = 2;
+    let bigMapRadius = BIG_MAP_INITIAL_RADIUS;
+    let expandPending = false;
+    let lastMapId = null;
+    let lastData = null;  // pour re-render quand le filtre change
+    const gridCache = new Map(); // `${mapId}:${radius}` → data
+
+    // Filtre : ids de ressources masquées, persisté en localStorage
+    const HIDDEN_KEY = 'stakk-overlay-hidden';
+    let hiddenIds = new Set();
+    try {
+      const raw = localStorage.getItem(HIDDEN_KEY);
+      if (raw) hiddenIds = new Set(JSON.parse(raw).map(Number));
+    } catch {}
+
+    // ─── Routes (trajets) — LECTURE via API serveur ─────────────────────
+    // L'overlay Electron et le planner navigateur ont des localStorage
+    // ISOLÉS malgré le même origin (backends de stockage différents par
+    // process). Les trajets sont donc stockés côté serveur stakk.exe dans
+    // ~/.stakk/routes.json, exposés via /api/overlay/routes*. Le polling
+    // détecte les changements via un `version` counter incrémenté par le
+    // serveur à chaque modification.
+    let routeStore = {};
+    let activeRoute = { name: '', waypoints: [] };
+    let routesVersion = 0;
+
+    async function fetchRoutesState() {
+      try {
+        const r = await fetch(`${STAKK_URL}/api/overlay/routes`, { cache: 'no-store' });
+        if (!r.ok) return null;
+        return await r.json();
+      } catch { return null; }
+    }
+    async function setActiveRouteOnServer(name) {
+      try {
+        const r = await fetch(`${STAKK_URL}/api/overlay/routes/active`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name || '' }),
+        });
+        return r.ok ? await r.json() : null;
+      } catch { return null; }
+    }
+    function applyRoutesState(state) {
+      if (!state) return;
+      routeStore = state.routes || {};
+      routesVersion = state.version || 0;
+      const serverActive = state.activeRoute || '';
+      if (serverActive && routeStore[serverActive]) {
+        activeRoute = { name: serverActive, waypoints: [...(routeStore[serverActive].waypoints || [])] };
+      } else {
+        activeRoute = { name: '', waypoints: [] };
+      }
+    }
+    function populateRouteSel() {
+      const sel = document.getElementById('routeSel');
+      if (!sel) return;
+      const names = Object.keys(routeStore).sort();
+      sel.innerHTML =
+        '<option value="">' + tr('routePlaceholder') + '</option>' +
+        names.map(n => {
+          const safe = n.replace(/"/g, '&quot;');
+          const cnt = (routeStore[n].waypoints || []).length;
+          const selAttr = n === activeRoute.name ? ' selected' : '';
+          return `<option value="${safe}"${selAttr}>${safe} (${cnt})</option>`;
+        }).join('');
+    }
+    document.getElementById('routeSel')?.addEventListener('change', async (e) => {
+      const name = e.target.value;
+      const r = await setActiveRouteOnServer(name);
+      if (r) {
+        if (name && routeStore[name]) {
+          activeRoute = { name, waypoints: [...(routeStore[name].waypoints || [])] };
+        } else {
+          activeRoute = { name: '', waypoints: [] };
+        }
+        routesVersion = r.version || routesVersion;
+      }
+      if (lastData) renderGrid(lastData);
+      showToast(activeRoute.name ? tr('routeLoaded', { name: activeRoute.name }) : tr('routeDisabled'));
+    });
+    // Init + poll périodique : détecte les nouveaux trajets créés dans le
+    // planner. Le version counter évite de refetcher/re-render pour rien.
+    (async () => {
+      const rs = await fetchRoutesState();
+      if (rs) { applyRoutesState(rs); populateRouteSel(); if (lastData) renderGrid(lastData); }
+    })();
+    setInterval(async () => {
+      const rs = await fetchRoutesState();
+      if (!rs) return;
+      if (rs.version !== routesVersion) {
+        applyRoutesState(rs);
+        populateRouteSel();
+        if (lastData) renderGrid(lastData);
+      }
+    }, 3000);
+
+    // Banner "Étape X/Y → direction" affiché dans la vue normale (3x3) quand
+    // un trajet est actif. Donne à l'user l'info next-step sans qu'il ait à
+    // ouvrir le big-map. Direction = 8 octants (N, NE, E, SE, S, SW, W, NW).
+    function renderRouteBanner(center) {
+      const banner = document.getElementById('routeBanner');
+      if (!banner) return;
+      if (!center || activeRoute.waypoints.length === 0 || bigMap) {
+        banner.style.display = 'none';
+        return;
+      }
+      const wps = activeRoute.waypoints;
+      const curIdx = wps.findIndex(w => w.x === center.posX && w.y === center.posY);
+      let nextWp, stepLabel;
+      if (curIdx === -1) {
+        nextWp = wps[0];
+        stepLabel = `${tr('start')} → 1/${wps.length}`;
+      } else if (curIdx === wps.length - 1) {
+        banner.textContent = `${tr('arrived')} (${wps.length}/${wps.length})${activeRoute.name ? ' · ' + activeRoute.name : ''}`;
+        banner.style.display = 'block';
+        return;
+      } else {
+        nextWp = wps[curIdx + 1];
+        stepLabel = `${curIdx + 1}/${wps.length} →`;
+      }
+      const dx = nextWp.x - center.posX;
+      const dy = nextWp.y - center.posY;
+      const dir = dirOctant(dx, dy);
+      const dist = Math.max(Math.abs(dx), Math.abs(dy));
+      banner.textContent = `${stepLabel} ${dir} ${dist} ${dist > 1 ? tr('cells') : tr('cell')} (${nextWp.x},${nextWp.y})${activeRoute.name ? ' · ' + activeRoute.name : ''}`;
+      banner.style.display = 'block';
+    }
+    function dirOctant(dx, dy) {
+      if (dx === 0 && dy === 0) return '•';
+      const ang = Math.atan2(dy, dx) * 180 / Math.PI; // -180..180, 0 = E, -90 = N
+      if (ang >= -22.5 && ang < 22.5) return 'E';
+      if (ang >= 22.5 && ang < 67.5) return 'SE';
+      if (ang >= 67.5 && ang < 112.5) return 'S';
+      if (ang >= 112.5 && ang < 157.5) return 'SW';
+      if (ang >= 157.5 || ang < -157.5) return 'W';
+      if (ang >= -157.5 && ang < -112.5) return 'NW';
+      if (ang >= -112.5 && ang < -67.5) return 'N';
+      return 'NE';
+    }
+    function saveHidden() {
+      try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenIds])); } catch {}
+    }
+    function toggleHidden(id, hidden) {
+      if (hidden === undefined) hidden = !hiddenIds.has(id);
+      if (hidden) hiddenIds.add(id); else hiddenIds.delete(id);
+      saveHidden();
+      if (lastData) renderGrid(lastData);
+      renderFilterBar(lastData);
+    }
+
+    const filterBar = document.getElementById('filterBar');
+    function renderFilterBar(data) {
+      filterBar.innerHTML = '';
+      if (!data || !data.cells) return;
+      // Liste tous les itemIds présents dans la grille courante + tous les
+      // hidden (même si pas dans la grille, pour pouvoir les ré-activer).
+      const ids = new Set([...hiddenIds]);
+      for (const c of data.cells) {
+        if (c.details) for (const k of Object.keys(c.details)) ids.add(+k);
+      }
+      const sorted = [...ids].sort((a, b) => {
+        const na = nameFor(data.names, a);
+        const nb = nameFor(data.names, b);
+        return na.localeCompare(nb, I18N.lang);
+      });
+      const lbl = document.createElement('span');
+      lbl.className = 'lbl';
+      lbl.textContent = tr('filtersLabel');
+      filterBar.appendChild(lbl);
+      for (const id of sorted) {
+        const url = iconUrlFor(data.names, id);
+        if (!url) continue;
+        const el = document.createElement('img');
+        el.className = 'filter-item' + (hiddenIds.has(id) ? ' off' : '');
+        el.src = url;
+        el.title = nameFor(data.names, id) + (hiddenIds.has(id) ? ' (' + tr('hidden') + ')' : '');
+        el.draggable = false;
+        el.addEventListener('click', () => toggleHidden(id));
+        filterBar.appendChild(el);
+      }
+    }
+
+    function applyGridSize() {
+      const n = radius * 2 + 1;
+      if (bigMap) {
+        // Cells à taille fixe pour qu'elles débordent et que le container scroll
+        grid.style.gridTemplateColumns = `repeat(${n}, 36px)`;
+        grid.style.gridTemplateRows    = `repeat(${n}, 36px)`;
+      } else {
+        // Fill panel : cells en 1fr, tiennent exactement dans la fenêtre
+        grid.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+        grid.style.gridTemplateRows    = `repeat(${n}, 1fr)`;
+      }
+    }
+
+    // Nom d'item dans la langue de l'UI (dofusdb renvoie fr/en/es/de/pt)
+    function nameFor(names, id) {
+      return I18N.itemName(names, id);
+    }
+    function iconUrlFor(names, id) {
+      const n = names?.[id];
+      return n?.iconId ? `https://api.dofusdb.fr/img/items/${n.iconId}.png` : null;
+    }
+
+    const diag = document.getElementById('diagBar');
+    // diagSet(msg, isError) — isError=true affiche la barre (problème), false
+    // la masque (tout va bien, ne pas polluer). body.connected masque aussi.
+    function diagSet(msg, isError = true) {
+      if (!diag) return;
+      diag.textContent = msg || '';
+      diag.style.display = (msg && isError) ? 'block' : 'none';
+    }
+
+    const toast = document.getElementById('toast');
+    let toastTimer = null;
+    function showToast(msg) {
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
+    }
+
+    async function fetchGrid(mapId, r) {
+      const key = `${mapId}:${r}`;
+      if (gridCache.has(key)) return gridCache.get(key);
+      const url = `${STAKK_URL}/api/map-grid?mapId=${mapId}&radius=${r}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          diagSet(tr('httpForMapGrid', { code: res.status, mapId }));
+          return null;
+        }
+        const j = await res.json();
+        gridCache.set(key, j);
+        diagSet('');
+        return j;
+      } catch (e) {
+        diagSet(tr('fetchErrMapGrid', { msg: e.message }));
+        return null;
+      }
+    }
+
+    function renderGrid(data) {
+      // Clear seulement les cellules — on garde le <svg id="routeSvg"> qui
+      // est un enfant frère du grid.
+      for (const c of grid.querySelectorAll('.cell')) c.remove();
+      applyGridSize();
+      const center = data?.center;
+      const cells = data?.cells || [];
+      const names = data?.names || {};
+      const byCoord = new Map();
+      for (const c of cells) byCoord.set(`${c.posX},${c.posY}`, c);
+      const wpSet = new Set();
+      for (const w of activeRoute.waypoints) wpSet.add(`${w.x},${w.y}`);
+      // DocumentFragment : ajout de 10k cells dans le DOM en une seule fois
+      // au lieu de 10k reflows. Gain de ~10× sur le render en mode XL.
+      const frag = document.createDocumentFragment();
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const x = center ? center.posX + dx : null;
+          const y = center ? center.posY + dy : null;
+          const cell = center ? byCoord.get(`${x},${y}`) : null;
+          const div = document.createElement('div');
+          div.className = 'cell';
+          if ((dx + dy + radius * 2) % 2 === 1) div.classList.add('alt');
+          if (dx === 0 && dy === 0) div.classList.add('center');
+          if (!cell) div.classList.add('empty-cell');
+          // Marque les coords sans map dofusdb (falaises/mer/bord du monde)
+          // distinctement de "loading" : empty-cell sans center = pas de data,
+          // empty-cell AVEC center = vraiment pas de map à ces coords.
+          if (center && !cell) div.classList.add('no-map');
+          if (center && wpSet.has(`${x},${y}`)) {
+            div.classList.add('waypoint');
+          }
+          if (center) {
+            // Expose coords pour le click → copier /travel X Y
+            div.dataset.x = x;
+            div.dataset.y = y;
+            div.dataset.clickable = '1';
+            const coord = document.createElement('div');
+            coord.className = 'coord';
+            coord.textContent = `${x},${y}`;
+            div.appendChild(coord);
+          }
+          if (cell && cell.details && Object.keys(cell.details).length) {
+            const tip = [`(${x}, ${y})`];
+            const visibleEntries = Object.entries(cell.details)
+              .filter(([id]) => !hiddenIds.has(+id));
+            for (const [id, n] of visibleEntries) {
+              const idNum = +id;
+              const span = document.createElement('span');
+              span.className = 'res';
+              span.dataset.itemId = idNum;
+              const url = iconUrlFor(names, idNum);
+              if (url) {
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = nameFor(names, idNum);
+                img.draggable = false;
+                span.appendChild(img);
+              } else {
+                const dot = document.createElement('div');
+                dot.style.cssText = `width:14px;height:14px;border-radius:50%;background:hsl(${(idNum*137)%360},80%,55%);border:1px solid #000;`;
+                span.appendChild(dot);
+              }
+              if (n > 1) {
+                const c = document.createElement('span');
+                c.className = 'count';
+                c.textContent = n;
+                span.appendChild(c);
+              }
+              div.appendChild(span);
+              tip.push(`${nameFor(names, idNum)} ×${n}`);
+            }
+            div.dataset.tooltip = tip.join('\n');
+          } else if (center) {
+            div.dataset.tooltip = `(${x}, ${y})`;
+          }
+          frag.appendChild(div);
+        }
+      }
+      grid.appendChild(frag);
+      renderRouteBanner(center);
+      renderRouteArrows();
+    }
+
+    // Dessine les flèches du trajet par-dessus la grille via le SVG enfant
+    // de #grid. Cercle vert au départ, rouge à l'arrivée, bleus au milieu.
+    // Pixel positions calculées via offsetLeft/Top (relatives au grid car
+    // #grid est position:relative).
+    function renderRouteArrows() {
+      const svgEl = document.getElementById('routeSvg');
+      if (!svgEl) return;
+      svgEl.innerHTML = '';
+      if (!activeRoute.waypoints.length) {
+        svgEl.setAttribute('width', 0);
+        svgEl.setAttribute('height', 0);
+        return;
+      }
+      const cellByCoord = new Map();
+      for (const cell of grid.querySelectorAll('.cell[data-x]')) {
+        cellByCoord.set(`${cell.dataset.x},${cell.dataset.y}`, cell);
+      }
+      const points = [];
+      for (const wp of activeRoute.waypoints) {
+        const cell = cellByCoord.get(`${wp.x},${wp.y}`);
+        if (!cell) { points.push(null); continue; }
+        points.push({
+          x: cell.offsetLeft + cell.offsetWidth / 2,
+          y: cell.offsetTop + cell.offsetHeight / 2,
+        });
+      }
+      const w = grid.scrollWidth;
+      const h = grid.scrollHeight;
+      svgEl.setAttribute('width', w);
+      svgEl.setAttribute('height', h);
+      svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      let svg = `<defs><marker id="arr-${Date.now()}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#1abc9c"/></marker></defs>`;
+      const markerId = svg.match(/id="(arr-\d+)"/)[1];
+      for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i], b = points[i + 1];
+        if (!a || !b) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 1) continue;
+        const nx = dx / d, ny = dy / d;
+        const trim = 8;
+        svg += `<line x1="${a.x + nx*trim}" y1="${a.y + ny*trim}" x2="${b.x - nx*trim}" y2="${b.y - ny*trim}" stroke="#1abc9c" stroke-width="2.5" stroke-linecap="round" marker-end="url(#${markerId})" opacity="0.9"/>`;
+      }
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        if (!p) continue;
+        let color, r;
+        if (i === 0) { color = '#2ecc71'; r = 6; }
+        else if (i === points.length - 1) { color = '#e74c3c'; r = 6; }
+        else { color = '#3498db'; r = 5; }
+        svg += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${color}" stroke="#fff" stroke-width="1.5"/>`;
+      }
+      svgEl.innerHTML = svg;
+    }
+
+    async function refresh(mapId) {
+      const data = await fetchGrid(mapId, radius);
+      if (mapId === lastMapId) {
+        lastData = data;
+        renderGrid(data);
+        renderFilterBar(data);
+      }
+    }
+
+    async function poll() {
+      try {
+        const [stateRes, linkRes] = await Promise.all([
+          fetch(`${STAKK_URL}/api/map-state`, { cache: 'no-store' }),
+          fetch(`${STAKK_URL}/api/overlay/link`, { cache: 'no-store' }).catch(() => null),
+        ]);
+        if (!stateRes.ok) { diagSet(`map-state HTTP ${stateRes.status}`); return; }
+        const state = await stateRes.json();
+        const linked = linkRes?.ok ? (await linkRes.json()).accountId : null;
+        const entries = Object.entries(state);
+        if (entries.length === 0) { diagSet(tr('noAccountRunning')); return; }
+        // Comptes avec une map détectée (le proxy a vu un ChangeMapMessage).
+        // Tant qu'aucun compte n'a bougé, mapId est null → on demande un
+        // déplacement plutôt que d'afficher "aucun compte actif".
+        const withMap = entries.filter(([, v]) => v && v.mapId);
+        if (withMap.length === 0) {
+          diagSet(tr('moveToDetect', { n: entries.length }));
+          return;
+        }
+
+        let chosen;
+        if (linked != null && state[linked] && state[linked].mapId) {
+          chosen = state[linked];
+        } else {
+          // Auto-pick : celui dont la map a été update le plus récemment
+          withMap.sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+          chosen = withMap[0][1];
+        }
+        const mapId = chosen.mapId;
+        if (mapId !== lastMapId) {
+          lastMapId = mapId;
+          await refresh(mapId);
+        }
+        // Dès qu'on a un mapId valide → perso connecté, on masque la diag bar
+        if (mapId) {
+          document.body.classList.add('connected');
+          diagSet('');
+        }
+      } catch (e) { diagSet(tr('mapStateErr', { msg: e.message })); }
+    }
+
+    // ─── Tooltip : évite le clignotement en ne re-setant textContent QUE
+    //     sur changement de cellule hover (pas à chaque mousemove). mousemove
+    //     ne fait que repositionner. ────────────────────────────────────────
+    let hoveredCell = null;
+    function hideTooltip() {
+      tooltip.style.display = 'none';
+      hoveredCell = null;
+    }
+    function updateTooltipFor(cell) {
+      if (!cell || !cell.dataset.tooltip) { hideTooltip(); return; }
+      if (cell === hoveredCell) return; // pas de reflow inutile
+      hoveredCell = cell;
+      tooltip.textContent = cell.dataset.tooltip;
+      tooltip.style.display = 'block';
+    }
+    document.addEventListener('mousemove', (e) => {
+      const cell = e.target.closest('.cell');
+      updateTooltipFor(cell);
+      if (hoveredCell) {
+        tooltip.style.left = Math.min(window.innerWidth - 230, e.clientX + 12) + 'px';
+        tooltip.style.top  = Math.min(window.innerHeight - 100, e.clientY + 12) + 'px';
+      }
+    });
+    document.addEventListener('mouseleave', hideTooltip);
+    document.addEventListener('mouseout',   (e) => { if (!e.relatedTarget) hideTooltip(); });
+    window.addEventListener('blur', hideTooltip);
+
+    // ─── Click sur cellule → copie /travel X Y dans le presse-papier, feedback
+    //     visuel vert pendant 500ms. navigator.clipboard peut échouer dans
+    //     Electron (permission policy), donc fallback execCommand('copy') via
+    //     textarea temporaire. ──────────────────────────────────────────────
+    async function copyToClipboard(text) {
+      try {
+        if (navigator.clipboard && window.isSecureContext !== false) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch {}
+      // Fallback legacy — fonctionne tant qu'on est dans un user-gesture.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none';
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+      return ok;
+    }
+    document.addEventListener('click', async (e) => {
+      const cell = e.target.closest('.cell');
+      if (!cell || cell.dataset.clickable !== '1') return;
+      const x = cell.dataset.x, y = cell.dataset.y;
+      if (x == null || y == null) return;
+      const cmd = `/travel ${x} ${y}`;
+      const ok = await copyToClipboard(cmd);
+      if (ok) {
+        showToast(`${tr('copied')} : ${cmd}`);
+        cell.classList.add('copied');
+        setTimeout(() => cell.classList.remove('copied'), 500);
+      } else {
+        showToast(tr('copyFailed'));
+      }
+    });
+
+    // Bouton 📋 ouvre la page planner. window.open déclenche le
+    // setWindowOpenHandler côté main.js qui utilise shell.openExternal pour
+    // ouvrir dans le navigateur par défaut (pas une nouvelle fenêtre Electron).
+    document.getElementById('plannerBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.open(`${STAKK_URL}/overlay/planner.html`, '_blank');
+    });
+
+    applyStaticI18n();
+    applyGridSize();
+    renderGrid(null); // grille vide visible dès le démarrage
+    setInterval(poll, 500);
+    poll();
+
+    // Auto-toggle click-through via document.title : main.js écoute
+    // page-title-updated et (dés)active setIgnoreMouseEvents. Quand la souris
+    // entre dans le panel → clicks réagissent (tooltip + /travel copy).
+    // Quand elle sort → clicks passent vers Dofus. Pas besoin de hotkey ni
+    // de rebuild preload.
+    // Title = canal de signal vers main.js (preload.js bundlé n'expose pas
+    // d'IPC générique). Formats :
+    //   stakk-overlay-click  → souris dans la fenêtre, main.js désactive
+    //                          setIgnoreMouseEvents (clicks arrivent au DOM)
+    //   stakk-overlay-idle   → souris hors fenêtre, click-through activé
+    //   suffixe -plan         → bigMap actif, main.js agrandit la fenêtre
+    //                          (savedCompactBounds + setBounds(70%×80%))
+    //   sans -plan            → main.js restaure les bounds compactes
+    //
+    // Hover tracké via l'event type (mouseenter/mouseleave) et pas via
+    // :hover query, parce que Chromium peut retourner l'ancien état du
+    // pseudo-pass au moment où l'event fire → title 'idle' au mauvais moment
+    // → click-through activé alors qu'on est bien dans la fenêtre → clicks
+    // passent à Dofus au lieu de l'overlay (bug signalé sur la toolbar route).
+    //
+    // Listener attaché à <body> (et pas à #panel) : le panel est inset:3px
+    // donc la bordure 3px du contour n'est pas dans panel → mouseleave fire
+    // dès qu'on traverse cette bordure, même si on reste dans la fenêtre.
+    // <body> couvre 100% de la fenêtre → plus de faux-leaves.
+    let windowHovered = false;
+    function updateTitle() {
+      if (document.body.classList.contains('dragging')) return;
+      document.title =
+        (windowHovered ? 'stakk-overlay-click' : 'stakk-overlay-idle') +
+        (bigMap ? '-plan' : '');
+    }
+    document.body.addEventListener('mouseenter', () => { windowHovered = true;  updateTitle(); });
+    document.body.addEventListener('mouseleave', () => { windowHovered = false; updateTitle(); });
+    // Fallback : si la souris est déjà dans la fenêtre au chargement (pas
+    // d'event mouseenter de traversée), le premier mousemove nous signale
+    // qu'on est bien dedans → update title pour désactiver click-through.
+    document.body.addEventListener('mousemove', () => {
+      if (!windowHovered) { windowHovered = true; updateTitle(); }
+    }, { passive: true });
+
+    // ─── Bouton vue étendue (big map) ────────────────────────────────────
+    // Bascule entre le grid normal (radius user-défini, fill panel) et une
+    // vue XL scrollable façon dofusdb pour voir les ressources autour et
+    // planifier des trajets. En big-map, main.js agrandit la fenêtre overlay
+    // (plan-mode via document.title suffix '-plan').
+    const bigMapBtn = document.getElementById('bigMapBtn');
+    let pendingCenterScroll = false;
+    async function toggleBigMap() {
+      bigMap = !bigMap;
+      document.body.classList.toggle('big-map', bigMap);
+      if (bigMap) {
+        bigMapRadius = BIG_MAP_INITIAL_RADIUS;
+        radius = bigMapRadius;
+      } else {
+        radius = normalRadius;
+      }
+      bigMapBtn.title = bigMap ? tr('bigMapOff') : tr('bigMapOn');
+      bigMapBtn.setAttribute('aria-label', bigMapBtn.title);
+      // Icônes SVG : expand (flèches sortantes) en vue normale, X en big-map
+      // pour signifier "fermer la vue étendue".
+      bigMapBtn.innerHTML = bigMap
+        ? '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+        : '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+      // Signale à main.js qu'on veut la fenêtre en plan-size (via title).
+      // Le click sur ⛶ implique forcément que la souris est dans la fenêtre
+      // à ce moment, donc on force windowHovered=true pour garantir que le
+      // title a bien 'click' (sinon click-through ON après le resize).
+      windowHovered = true;
+      updateTitle();
+      applyGridSize();
+      if (lastMapId) await refresh(lastMapId);
+      if (bigMap) {
+        // La fenêtre est en train de grandir (Electron setBounds côté main).
+        // On arme un flag : au prochain resize event du window, on re-scroll
+        // pour centrer la cellule courante dans le nouveau viewport. Fallback
+        // timeout au cas où le resize event ne firerait pas (déjà à la bonne
+        // taille). Dans tous les cas on fait aussi un scroll initial maintenant.
+        const doCenter = () => {
+          const c = grid.querySelector('.cell.center');
+          if (c) c.scrollIntoView({ block: 'center', inline: 'center' });
+        };
+        requestAnimationFrame(doCenter);
+        pendingCenterScroll = true;
+        setTimeout(() => {
+          if (pendingCenterScroll) { pendingCenterScroll = false; doCenter(); }
+        }, 350);
+      }
+    }
+    window.addEventListener('resize', () => {
+      if (pendingCenterScroll) {
+        pendingCenterScroll = false;
+        const c = grid.querySelector('.cell.center');
+        if (c) c.scrollIntoView({ block: 'center', inline: 'center' });
+      }
+    });
+
+    // ─── Chargement dynamique : expand radius quand on scroll près d'un bord
+    //     (et qu'on est en vue étendue). Garde la position scroll relative au
+    //     center en compensant les nouvelles cells ajoutées aux bords.
+    //     Skip pendant un drag actif : sinon le re-render mid-drag fait sauter
+    //     le grid et la baseline scrollX/Y du drag devient stale.
+    async function expandBigMapIfNeeded() {
+      if (!bigMap || expandPending || bigMapRadius >= BIG_MAP_MAX_RADIUS) return;
+      if (dragState && dragState.moved) return;
+      const edge = EDGE_THRESHOLD_CELLS * (CELL_SIZE + CELL_GAP);
+      const maxX = grid.scrollWidth - grid.clientWidth;
+      const maxY = grid.scrollHeight - grid.clientHeight;
+      const nearEdge =
+        grid.scrollLeft < edge ||
+        grid.scrollTop < edge ||
+        (maxX - grid.scrollLeft) < edge ||
+        (maxY - grid.scrollTop) < edge;
+      if (!nearEdge) return;
+      expandPending = true;
+      try {
+        const prevRadius = bigMapRadius;
+        const prevScrollX = grid.scrollLeft;
+        const prevScrollY = grid.scrollTop;
+        bigMapRadius = Math.min(BIG_MAP_MAX_RADIUS, bigMapRadius + BIG_MAP_STEP);
+        radius = bigMapRadius;
+        // Invalider le cache de la radius précédente pour refetch large
+        gridCache.delete(`${lastMapId}:${prevRadius}`);
+        applyGridSize();
+        if (lastMapId) await refresh(lastMapId);
+        // Compense le scroll : BIG_MAP_STEP cells ajoutées à GAUCHE et HAUT
+        // (car le grid est centré sur le player), donc on décale scroll par
+        // le même delta pour rester visuellement sur la même zone.
+        const diff = (bigMapRadius - prevRadius) * (CELL_SIZE + CELL_GAP);
+        grid.scrollLeft = prevScrollX + diff;
+        grid.scrollTop  = prevScrollY + diff;
+      } finally {
+        expandPending = false;
+      }
+    }
+    // Throttle le check scroll pour éviter de fire refetch 60x/s pendant le drag
+    let scrollThrottle = null;
+    grid.addEventListener('scroll', () => {
+      if (scrollThrottle) return;
+      scrollThrottle = setTimeout(() => {
+        scrollThrottle = null;
+        expandBigMapIfNeeded();
+      }, 150);
+    });
+    if (bigMapBtn) {
+      bigMapBtn.addEventListener('click', (e) => {
+        e.stopPropagation();  // évite que le click handler cell intercepte
+        toggleBigMap();
+      });
+    }
+
+    // ─── Drag-to-pan (vue étendue uniquement) ───────────────────────────
+    // Pointer events + setPointerCapture : garantit qu'on reçoit pointermove
+    // et pointerup même si la souris sort de la fenêtre Electron, contrairement
+    // à mouse* qui s'arrête au bord. Le flag body.dragging :
+    //   1. désactive le toggle click-through pendant le drag (sinon la souris
+    //      qui passe brièvement sur la bordure 3px du panel coupe le drag),
+    //   2. signale au reste du code (expand, etc.) qu'un drag est en cours.
+    // dragstart preventDefault + CSS user-drag:none = belt-and-suspenders pour
+    // empêcher le drag HTML5 natif d'une .res img qui causait le "saut au début
+    // du drag" (ghost image qui vole top-right puis revient).
+    let dragState = null;
+    const DRAG_THRESHOLD = 4;
+    grid.addEventListener('dragstart', (e) => e.preventDefault());
+    grid.addEventListener('pointerdown', (e) => {
+      if (!bigMap) return;
+      if (e.button !== 0 || e.pointerType === 'touch') return;
+      dragState = {
+        pointerId: e.pointerId,
+        startX: e.clientX, startY: e.clientY,
+        scrollX: grid.scrollLeft, scrollY: grid.scrollTop,
+        moved: false,
+      };
+      try { grid.setPointerCapture(e.pointerId); } catch {}
+      e.preventDefault();
+    });
+    grid.addEventListener('pointermove', (e) => {
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
+      const dx = e.clientX - dragState.startX;
+      const dy = e.clientY - dragState.startY;
+      if (!dragState.moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+        dragState.moved = true;
+        grid.classList.add('dragging');
+        document.body.classList.add('dragging');
+        hideTooltip();
+      }
+      if (dragState.moved) {
+        grid.scrollLeft = dragState.scrollX - dx;
+        grid.scrollTop  = dragState.scrollY - dy;
+      }
+    });
+    function endDrag(e) {
+      if (!dragState || (e && e.pointerId !== dragState.pointerId)) return;
+      const wasDragging = dragState.moved;
+      try { grid.releasePointerCapture(dragState.pointerId); } catch {}
+      dragState = null;
+      grid.classList.remove('dragging');
+      document.body.classList.remove('dragging');
+      if (wasDragging) {
+        // Capture le click qui suit le pointerup pour l'annuler (sinon la
+        // cellule où on relâche la souris déclencherait un copy /travel).
+        const killClick = (ev) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+          window.removeEventListener('click', killClick, true);
+        };
+        window.addEventListener('click', killClick, { capture: true, once: true });
+      }
+    }
+    grid.addEventListener('pointerup', endDrag);
+    grid.addEventListener('pointercancel', endDrag);
+
+    if (window.overlay) {
+      window.overlay.onEditMode((on) => {
+        document.body.classList.toggle('edit', on);
+        if (!on) tooltip.style.display = 'none';
+      });
+      window.overlay.onFilterMode((on) => {
+        document.body.classList.toggle('filter-mode', on);
+        if (on) renderFilterBar(lastData);
+      });
+      window.overlay.onRadius((r) => {
+        normalRadius = r;
+        if (!bigMap) {
+          radius = r;
+          if (lastMapId) refresh(lastMapId);
+          else { applyGridSize(); renderGrid(null); }
+        }
+        // En mode big-map, les hotkeys de radius n'affectent pas l'affichage
+        // courant ; la nouvelle valeur sera appliquée au retour en vue normale.
+      });
+    }
+  </script>
+</body>
+</html>

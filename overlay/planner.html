@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>STAKK — Planner</title>
+  <script src="i18n.js"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231abc9c' stroke-width='2'%3E%3Cpath d='M12 2L2 7l10 5 10-5-10-5z'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg:         #111318;
+      --panel:      #181c24;
+      --panel2:     #1e222c;
+      --border:     #252a36;
+      --text:       #d4d8e4;
+      --dim:        #666d80;
+      --accent:     #1abc9c;
+      --accent-dim: rgba(26, 188, 156, 0.32);
+      --gold:       #f5c042;
+      --gold-dim:   rgba(245, 192, 66, 0.25);
+      --red:        #e74c3c;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100vh; overflow: hidden; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      user-select: none;
+    }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+    ::-webkit-scrollbar-thumb { background: #2a2f3a; border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+    .app { display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh; }
+
+    /* ─── Header / toolbar ──────────────────────────────────────────── */
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    header h1 .logo {
+      width: 22px; height: 22px;
+      background: linear-gradient(135deg, var(--accent), #16a085);
+      border-radius: 5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 11px;
+    }
+    .tb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .tb input, .tb select, .tb button {
+      height: 30px;
+      padding: 0 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      outline: none;
+    }
+    .tb input { min-width: 180px; }
+    .tb input:focus, .tb select:focus { border-color: var(--accent); }
+    .tb button {
+      cursor: pointer;
+      font-weight: 600;
+      transition: all .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tb button svg, .filters .reset svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+    .filters .reset { display: inline-flex; align-items: center; gap: 5px; }
+    .tb button:hover { border-color: var(--accent); color: var(--accent); }
+    .tb button.primary { background: var(--accent); border-color: var(--accent); color: #0a0d12; }
+    .tb button.primary:hover { filter: brightness(1.1); color: #0a0d12; }
+    .tb button.danger:hover { border-color: var(--red); color: var(--red); }
+    .tb button.on { background: rgba(26, 188, 156, 0.25); border-color: var(--accent); color: var(--accent); }
+    .tb .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+    .tb .info {
+      color: var(--dim);
+      font-size: 11px;
+      padding: 0 8px;
+      white-space: nowrap;
+    }
+    .tb .info strong { color: var(--accent); font-weight: 700; }
+
+    /* ─── Filter bar (2e ligne du header) ───────────────────────────── */
+    .filters {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      font-size: 11px;
+    }
+    .filters .flabel {
+      color: var(--dim);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-right: 6px;
+    }
+    .filters .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px 4px 4px;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: all .12s;
+      font-size: 11px;
+      color: var(--dim);
+      user-select: none;
+    }
+    .filters .chip img { width: 18px; height: 18px; display: block; }
+    .filters .chip:hover { border-color: var(--accent); color: var(--text); }
+    .filters .chip.on {
+      background: rgba(26, 188, 156, 0.18);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+    .filters .chip .n {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 1px 5px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-left: 2px;
+    }
+    .filters .chip.on .n { background: var(--accent); color: #0a0d12; }
+    .filters .reset {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .filters .reset:hover { border-color: var(--accent); color: var(--accent); }
+    .filters.empty { display: none; }
+
+    /* ─── Grid / map ────────────────────────────────────────────────── */
+    main {
+      position: relative;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    #gridWrap {
+      position: absolute;
+      inset: 0;
+      overflow: auto;
+      cursor: crosshair;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(26, 188, 156, 0.04) 0%, transparent 50%),
+        var(--bg);
+    }
+    #gridWrap.dragging { cursor: grabbing; }
+    #grid {
+      position: relative; /* ancrage de #routeSvg en absolute */
+      display: grid;
+      gap: 2px;
+      padding: 40px;
+      width: max-content;
+      margin: 0 auto;
+    }
+    /* SVG des flèches de trajet — recouvre toute la grille, pointer-events
+       none pour ne pas bloquer les clicks/drags sur les cellules en dessous. */
+    #routeSvg {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+      z-index: 10;
+      overflow: visible;
+    }
+    .cell {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.025);
+      box-sizing: border-box;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 1px;
+      padding: 2px;
+      transition: background 80ms, border-color 80ms;
+      cursor: pointer;
+      -webkit-user-drag: none;
+      user-drag: none;
+    }
+    .cell.alt { background: rgba(255, 255, 255, 0.05); }
+    .cell:hover {
+      border-color: var(--accent);
+      background: rgba(26, 188, 156, 0.12);
+      z-index: 2;
+    }
+    /* Aucune map dofusdb à ces coords = case infranchissable (falaise, mer,
+       bord de zone). Hachures rouges + cursor not-allowed pour signaler
+       au joueur qu'il peut pas planifier de passage par là. */
+    .cell.no-map {
+      background:
+        repeating-linear-gradient(45deg,
+          transparent 0 5px,
+          rgba(231, 76, 60, 0.18) 5px 10px),
+        rgba(0, 0, 0, 0.25);
+      border-color: rgba(231, 76, 60, 0.35);
+      cursor: not-allowed;
+    }
+    .cell.no-map:hover {
+      background:
+        repeating-linear-gradient(45deg,
+          transparent 0 5px,
+          rgba(231, 76, 60, 0.32) 5px 10px),
+        rgba(0, 0, 0, 0.35);
+      border-color: rgba(231, 76, 60, 0.6);
+    }
+    .cell.no-map .coord { color: rgba(231, 76, 60, 0.55); }
+    .cell.current {
+      border-color: var(--gold);
+      background: var(--gold-dim);
+      box-shadow: inset 0 0 0 1px var(--gold), 0 0 8px rgba(245, 192, 66, 0.5);
+      z-index: 3;
+    }
+    /* Cellules waypoints : pas de fond/highlight — l'ordre et la position
+       sont indiqués via les flèches SVG par-dessus. On garde juste un léger
+       outline pour distinguer subtilement. */
+    .cell.waypoint { border-color: rgba(26, 188, 156, 0.4); }
+    .cell.waypoint.current { border-color: var(--accent); }
+    .coord {
+      position: absolute;
+      top: 1px;
+      left: 3px;
+      font-size: 8px;
+      color: var(--dim);
+      pointer-events: none;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    .cell.waypoint .coord, .cell.current .coord { color: rgba(255, 255, 255, 0.7); }
+    .res {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .res img {
+      width: 14px;
+      height: 14px;
+      display: block;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.9));
+      pointer-events: none;
+      -webkit-user-drag: none;
+      user-drag: none;
+    }
+    .res .count {
+      position: absolute;
+      bottom: -3px;
+      right: -3px;
+      min-width: 8px;
+      height: 9px;
+      padding: 0 2px;
+      box-sizing: border-box;
+      font-size: 8px;
+      font-weight: 700;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid var(--gold);
+      border-radius: 5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      letter-spacing: -0.3px;
+    }
+
+    /* ─── Tooltip ───────────────────────────────────────────────────── */
+    #tooltip {
+      position: fixed;
+      pointer-events: none;
+      background: rgba(24, 28, 36, 0.97);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+      font-size: 11px;
+      line-height: 1.5;
+      max-width: 260px;
+      white-space: pre-wrap;
+      z-index: 1000;
+      display: none;
+      font-weight: 500;
+    }
+
+    /* ─── Footer status bar ─────────────────────────────────────────── */
+    footer {
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      padding: 6px 16px;
+      font-size: 11px;
+      color: var(--dim);
+      display: flex;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    footer .hint kbd {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      color: var(--text);
+    }
+    #diag { color: var(--red); font-weight: 600; }
+    #diag:empty { display: none; }
+
+    /* ─── Toast ─────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      top: 68px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      padding: 8px 16px;
+      background: linear-gradient(180deg, #1abc9c, #16a085);
+      border: 1px solid rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      color: #fff;
+      font-weight: 600;
+      font-size: 12px;
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity .15s, transform .15s;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1><span class="logo">S</span> <span id="pageTitle">Planner de trajet</span></h1>
+    <div class="tb">
+      <input id="routeName" type="text" maxlength="40">
+      <button id="saveBtn" class="primary">
+        <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span id="saveBtnLbl">Enregistrer</span>
+      </button>
+      <select id="loadSel"><option value=""></option></select>
+      <button id="deleteBtn" class="danger">
+        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        <span id="deleteBtnLbl">Supprimer</span>
+      </button>
+      <span class="sep"></span>
+      <button id="clearBtn">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <span id="clearBtnLbl">Vider</span>
+      </button>
+      <button id="recenterBtn">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        <span id="recenterBtnLbl">Me centrer</span>
+      </button>
+      <button id="followBtn">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+        <span id="followBtnLbl">Suivre</span>
+      </button>
+      <span class="sep"></span>
+      <span class="info"><span id="radiusLbl">Rayon</span> : <strong id="radiusLabel">20</strong> <span id="radiusUnit">cases</span></span>
+      <button id="radiusDecBtn">−</button>
+      <button id="radiusIncBtn">+</button>
+      <span class="sep"></span>
+      <span class="info"><strong id="wpCount">0</strong> <span id="wpCountLbl">étape(s)</span></span>
+    </div>
+  </header>
+  <div class="filters empty" id="filters"></div>
+  <main>
+    <div id="gridWrap"><div id="grid"><svg id="routeSvg" xmlns="http://www.w3.org/2000/svg"></svg></div></div>
+  </main>
+  <footer>
+    <span class="hint">
+      <kbd>click</kbd> <span id="helpClick"></span> ·
+      <kbd>click+drag</kbd> <span id="helpDrag"></span> ·
+      <kbd>+ / −</kbd> <span id="helpRadius"></span>
+    </span>
+    <span id="stats" class="hint"></span>
+    <span id="diag"></span>
+  </footer>
+</div>
+<div id="tooltip"></div>
+<div id="toast"></div>
+
+<script>
+  'use strict';
+  // STAKK URL : même origin que cette page (loopback stakk.exe HTTP).
+  const STAKK_URL = location.origin;
+
+  // ─── i18n ──────────────────────────────────────────────────────────
+  // Langue pilotée par l'UI STAKK via /api/overlay/lang :
+  // les deux origines ne partagent pas leur localStorage.
+  const I18N = window.STAKK_I18N;
+  const tr = (k, v) => I18N.t(k, v);
+  function applyStaticI18n() {
+    const set = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = tr(key); };
+    const title = (id, key) => { const el = document.getElementById(id); if (el) el.title = tr(key); };
+    document.documentElement.lang = I18N.lang;
+    document.title = 'STAKK — ' + tr('plannerTitle');
+    set('pageTitle', 'plannerTitle');
+    const rn = document.getElementById('routeName');
+    if (rn) rn.placeholder = tr('routeNamePlaceholder');
+    set('saveBtnLbl', 'save');       title('saveBtn', 'saveRouteTitle');
+    set('deleteBtnLbl', 'delete');   title('deleteBtn', 'deleteRouteTitle');
+    set('clearBtnLbl', 'clear');     title('clearBtn', 'clearTitle');
+    set('recenterBtnLbl', 'recenter'); title('recenterBtn', 'recenterTitle');
+    set('followBtnLbl', 'follow');   title('followBtn', 'followTitle');
+    title('radiusDecBtn', 'radiusDecTitle');
+    title('radiusIncBtn', 'radiusIncTitle');
+    set('radiusUnit', 'cells');
+    set('wpCountLbl', 'steps');
+    set('helpClick', 'helpClick');
+    set('helpDrag', 'helpDrag');
+    set('helpRadius', 'helpRadius');
+  }
+
+  // ─── Constantes & état ────────────────────────────────────────────
+  const CELL_SIZE = 40;
+  const CELL_GAP = 2;
+  const CELL_PITCH = CELL_SIZE + CELL_GAP;
+  const MIN_RADIUS = 5;
+  const MAX_RADIUS = 50;
+  const RADIUS_STEP = 5;
+  const DRAG_THRESHOLD = 5;
+
+  // Les trajets vivent maintenant côté serveur (~/.stakk/routes.json) via
+  // /api/overlay/routes, parce que localStorage côté Electron (overlay) et
+  // côté navigateur par défaut (planner) sont isolés malgré le même origin
+  // → les routes créées ici n'étaient pas visibles dans l'overlay. Le
+  // localStorage ne garde plus que les préférences UI planner-only.
+  // Les clés *_KEY legacy servent uniquement pour la migration one-shot.
+  const LEGACY_ROUTES_KEY       = 'stakk-overlay-routes';
+  const LEGACY_ACTIVE_ROUTE_KEY = 'stakk-overlay-active-route';
+  const PLANNER_CENTER    = 'stakk-planner-center'; // dernier center utilisé
+  const PLANNER_RADIUS    = 'stakk-planner-radius';
+  const PLANNER_FILTER    = 'stakk-planner-filter'; // Set d'itemIds à montrer
+  const PLANNER_FOLLOW    = 'stakk-planner-follow'; // auto-recenter sur le joueur
+
+  let playerMapId = null;     // map courante du joueur (polled via /api/map-state)
+  let centerMapId = null;     // centre de la vue (= player par défaut, ou pick manuel)
+  let radius = 20;
+  try { radius = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, parseInt(localStorage.getItem(PLANNER_RADIUS) || '20', 10))); } catch {}
+  let lastData = null;
+  const gridCache = new Map(); // `${mapId}:${radius}` → data
+
+  // Filtre ressource : Set d'itemIds à afficher (inclusif). Vide = tout
+  // afficher. Persisté pour rester d'une session à l'autre.
+  let filterSet = new Set();
+  try {
+    const raw = localStorage.getItem(PLANNER_FILTER);
+    if (raw) filterSet = new Set(JSON.parse(raw).map(Number));
+  } catch {}
+  function saveFilter() {
+    try { localStorage.setItem(PLANNER_FILTER, JSON.stringify([...filterSet])); } catch {}
+  }
+
+  // Follow : true (default) → planner auto-re-centre quand le joueur
+  // change de map. L'user peut désactiver pour planifier à distance sans
+  // être interrompu. Persisté.
+  let followPlayer = true;
+  try { followPlayer = localStorage.getItem(PLANNER_FOLLOW) !== 'false'; } catch {}
+
+  // Routes : état local mirroring du serveur. Chargé au init via
+  // GET /api/overlay/routes, modifié via POST. Un `routesVersion`
+  // sert au polling pour détecter si qqn d'autre (overlay, autre tab
+  // planner) a modifié les routes côté serveur.
+  let routeStore = {};
+  let activeRoute = { name: '', waypoints: [] };
+  let routesVersion = 0;
+
+  // ─── DOM refs ─────────────────────────────────────────────────────
+  const gridWrap    = document.getElementById('gridWrap');
+  const grid        = document.getElementById('grid');
+  const routeSvg    = document.getElementById('routeSvg');
+  const tooltip     = document.getElementById('tooltip');
+  const toast       = document.getElementById('toast');
+  const diag        = document.getElementById('diag');
+  const routeName   = document.getElementById('routeName');
+  const saveBtn     = document.getElementById('saveBtn');
+  const loadSel     = document.getElementById('loadSel');
+  const deleteBtn   = document.getElementById('deleteBtn');
+  const clearBtn    = document.getElementById('clearBtn');
+  const recenterBtn = document.getElementById('recenterBtn');
+  const radiusInc   = document.getElementById('radiusIncBtn');
+  const radiusDec   = document.getElementById('radiusDecBtn');
+  const radiusLabel = document.getElementById('radiusLabel');
+  const wpCount     = document.getElementById('wpCount');
+  const filtersEl   = document.getElementById('filters');
+  const statsEl     = document.getElementById('stats');
+  const followBtn   = document.getElementById('followBtn');
+
+  // ─── Utils ────────────────────────────────────────────────────────
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toast.classList.remove('show'), 1800);
+  }
+  function setDiag(msg) { diag.textContent = msg || ''; }
+  // Nom d'item dans la langue de l'UI (dofusdb renvoie fr/en/es/de/pt)
+  function nameFor(names, id) {
+    return I18N.itemName(names, id);
+  }
+  function iconUrlFor(names, id) {
+    const n = names?.[id];
+    return n?.iconId ? `https://api.dofusdb.fr/img/items/${n.iconId}.png` : null;
+  }
+  // ─── API calls pour les routes ────────────────────────────────────
+  async function apiFetchRoutes() {
+    try {
+      const r = await fetch(`${STAKK_URL}/api/overlay/routes`, { cache: 'no-store' });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { return null; }
+  }
+  async function apiSaveRoute(name, waypoints) {
+    const r = await fetch(`${STAKK_URL}/api/overlay/routes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, waypoints }),
+    });
+    return r.ok ? await r.json() : null;
+  }
+  async function apiDeleteRoute(name) {
+    const r = await fetch(`${STAKK_URL}/api/overlay/routes/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    return r.ok ? await r.json() : null;
+  }
+  async function apiSetActiveRoute(name) {
+    const r = await fetch(`${STAKK_URL}/api/overlay/routes/active`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name || '' }),
+    });
+    return r.ok ? await r.json() : null;
+  }
+  // Sync local state from server response
+  function applyRoutesState(state) {
+    if (!state || typeof state !== 'object') return;
+    routeStore = state.routes || {};
+    routesVersion = state.version || 0;
+    const currentName = activeRoute.name;
+    const serverActive = state.activeRoute || '';
+    // Si le serveur a une active route et qu'on n'a pas déjà chargé la même
+    // en local, on la synchronise. Sinon on garde l'état local (l'user peut
+    // avoir édité des waypoints non encore sauvés).
+    if (serverActive && serverActive !== currentName && routeStore[serverActive]) {
+      activeRoute = { name: serverActive, waypoints: [...(routeStore[serverActive].waypoints || [])] };
+      const inp = document.getElementById('routeName');
+      if (inp) inp.value = serverActive;
+    }
+  }
+
+  // ─── API calls ────────────────────────────────────────────────────
+  async function fetchMapState() {
+    try {
+      const [stateRes, linkRes] = await Promise.all([
+        fetch(`${STAKK_URL}/api/map-state`, { cache: 'no-store' }),
+        fetch(`${STAKK_URL}/api/overlay/link`, { cache: 'no-store' }).catch(() => null),
+      ]);
+      if (!stateRes.ok) return null;
+      const state = await stateRes.json();
+      const linked = linkRes?.ok ? (await linkRes.json()).accountId : null;
+      // /api/map-state inclut désormais les comptes lancés sans mapId détecté
+      // (running:true, mapId:null) — on filtre pour ne garder que ceux avec
+      // une map réelle, sinon le planner essaierait de fetch grid(null).
+      const withMap = Object.entries(state).filter(([, v]) => v && v.mapId);
+      if (withMap.length === 0) return null;
+      if (linked != null && state[linked] && state[linked].mapId) return state[linked];
+      withMap.sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+      return withMap[0][1];
+    } catch (e) { return null; }
+  }
+  async function fetchGrid(mapId, r) {
+    const key = `${mapId}:${r}`;
+    if (gridCache.has(key)) return gridCache.get(key);
+    try {
+      const res = await fetch(`${STAKK_URL}/api/map-grid?mapId=${mapId}&radius=${r}`);
+      if (!res.ok) { setDiag(`HTTP ${res.status} /api/map-grid`); return null; }
+      const j = await res.json();
+      if (j.error) { setDiag(j.error); return null; }
+      gridCache.set(key, j);
+      setDiag('');
+      return j;
+    } catch (e) { setDiag(`FETCH ERR ${e.message}`); return null; }
+  }
+
+  // ─── Filter bar ───────────────────────────────────────────────────
+  // Build des chips à partir des itemIds uniques présents dans la grille
+  // courante. Pour chaque ressource, on montre icône + count global dans le
+  // viewport (utile pour voir "combien de cellules ont du fer dans le rayon").
+  // Click chip = toggle inclusion dans filterSet. Filtre actif = seules les
+  // cellules avec AU MOINS UN item sélectionné restent à pleine opacité.
+  function renderFilterBar(data) {
+    filtersEl.innerHTML = '';
+    if (!data || !data.cells || data.cells.length === 0) {
+      filtersEl.classList.add('empty');
+      return;
+    }
+    const names = data.names || {};
+    // Count par itemId : combien de cells l'ont, et quantité totale
+    const counts = new Map(); // id → { cells: n, total: n }
+    for (const c of data.cells) {
+      if (!c.details) continue;
+      for (const [id, n] of Object.entries(c.details)) {
+        const key = +id;
+        const entry = counts.get(key) || { cells: 0, total: 0 };
+        entry.cells += 1;
+        entry.total += n;
+        counts.set(key, entry);
+      }
+    }
+    // Inclut aussi les itemIds qui sont dans filterSet mais plus dans la
+    // grille (pour que l'user puisse les retirer du filtre).
+    for (const id of filterSet) if (!counts.has(id)) counts.set(id, { cells: 0, total: 0 });
+    if (counts.size === 0) {
+      filtersEl.classList.add('empty');
+      return;
+    }
+    filtersEl.classList.remove('empty');
+    // Filtre inclusif : filterSet vide = rien affiché, l'user sélectionne
+    // les ressources à afficher. Pas de bandeau « actif » — c'est l'état
+    // normal au chargement, pas une anomalie à signaler.
+    const label = document.createElement('span');
+    label.className = 'flabel';
+    label.textContent = filterSet.size === 0 ? tr('pickResources') : tr('shownResources');
+    filtersEl.appendChild(label);
+    // Tri alpha par nom pour une UX stable (pas de reshuffle à chaque fetch)
+    const sorted = [...counts.entries()].sort((a, b) => {
+      const na = nameFor(names, a[0]);
+      const nb = nameFor(names, b[0]);
+      return na.localeCompare(nb, I18N.lang);
+    });
+    for (const [id, count] of sorted) {
+      const chip = document.createElement('span');
+      chip.className = 'chip' + (filterSet.has(id) ? ' on' : '');
+      chip.title = nameFor(names, id) + ` · ${count.cells} ${tr('cells')}` + (count.total > count.cells ? ` · ${count.total} ${tr('total')}` : '');
+      const url = iconUrlFor(names, id);
+      if (url) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = '';
+        img.draggable = false;
+        chip.appendChild(img);
+      }
+      const txt = document.createElement('span');
+      txt.textContent = nameFor(names, id);
+      chip.appendChild(txt);
+      const cnt = document.createElement('span');
+      cnt.className = 'n';
+      cnt.textContent = count.cells;
+      chip.appendChild(cnt);
+      chip.addEventListener('click', () => {
+        if (filterSet.has(id)) filterSet.delete(id);
+        else filterSet.add(id);
+        saveFilter();
+        renderFilterBar(lastData);
+        if (lastData) { renderGrid(lastData); updateStats(lastData); }
+      });
+      filtersEl.appendChild(chip);
+    }
+    // Bouton "tout sélectionner" quand rien n'est coché (raccourci pour
+    // revenir au comportement "affiche tout"), ou "tout désélectionner"
+    // quand l'user a des sélections et veut repartir de zéro.
+    const toggleAll = document.createElement('button');
+    toggleAll.className = 'reset';
+    if (filterSet.size === 0) {
+      toggleAll.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> ' + tr('selectAll');
+      toggleAll.addEventListener('click', () => {
+        for (const id of counts.keys()) filterSet.add(id);
+        saveFilter();
+        renderFilterBar(lastData);
+        if (lastData) { renderGrid(lastData); updateStats(lastData); }
+      });
+    } else {
+      toggleAll.innerHTML = '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> ' + tr('deselectAll');
+      toggleAll.addEventListener('click', () => {
+        filterSet.clear();
+        saveFilter();
+        renderFilterBar(lastData);
+        if (lastData) { renderGrid(lastData); updateStats(lastData); }
+      });
+    }
+    filtersEl.appendChild(toggleAll);
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────
+  function renderGrid(data) {
+    // Clear seulement les cellules — on garde le <svg id="routeSvg"> qui
+    // est un enfant frère, sinon il faudrait le recréer/réattacher à chaque
+    // render.
+    for (const c of grid.querySelectorAll('.cell')) c.remove();
+    const n = radius * 2 + 1;
+    grid.style.gridTemplateColumns = `repeat(${n}, ${CELL_SIZE}px)`;
+    grid.style.gridTemplateRows    = `repeat(${n}, ${CELL_SIZE}px)`;
+
+    const center = data?.center;
+    const cells = data?.cells || [];
+    const names = data?.names || {};
+    const byCoord = new Map();
+    for (const c of cells) byCoord.set(`${c.posX},${c.posY}`, c);
+
+    const wpSet = new Set();
+    for (const w of activeRoute.waypoints) wpSet.add(`${w.x},${w.y}`);
+
+    const frag = document.createDocumentFragment();
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const x = center ? center.posX + dx : null;
+        const y = center ? center.posY + dy : null;
+        const cell = center ? byCoord.get(`${x},${y}`) : null;
+        const div = document.createElement('div');
+        div.className = 'cell';
+        if ((dx + dy + radius * 2) % 2 === 1) div.classList.add('alt');
+        if (dx === 0 && dy === 0) div.classList.add('current');
+        // Aucune map à ces coords dans le worldmap dofusdb = case infranchissable
+        if (center && !cell) div.classList.add('no-map');
+        if (center) {
+          div.dataset.x = x;
+          div.dataset.y = y;
+          div.dataset.mapId = cell ? cell.mapId : '';
+          const coord = document.createElement('div');
+          coord.className = 'coord';
+          coord.textContent = `${x},${y}`;
+          div.appendChild(coord);
+        }
+        if (center && wpSet.has(`${x},${y}`)) {
+          div.classList.add('waypoint');
+        }
+        if (cell && cell.details && Object.keys(cell.details).length) {
+          const entries = Object.entries(cell.details);
+          // Filtre inclusif façon dofusdb : filterSet vide = RIEN affiché
+          // (rendu rapide par défaut, l'user choisit ce qu'il veut voir).
+          // Tooltip garde toutes les ressources pour rester informatif au
+          // survol sans avoir à activer de filtre.
+          const shown = filterSet.size === 0
+            ? []
+            : entries.filter(([id]) => filterSet.has(+id));
+          const tip = [`(${x}, ${y})`];
+          for (const [idAll, nAll] of entries) {
+            tip.push(`${nameFor(names, +idAll)} ×${nAll}`);
+          }
+          for (const [id, n] of shown) {
+            const idNum = +id;
+            const span = document.createElement('span');
+            span.className = 'res';
+            const url = iconUrlFor(names, idNum);
+            if (url) {
+              const img = document.createElement('img');
+              img.src = url;
+              img.alt = nameFor(names, idNum);
+              img.draggable = false;
+              span.appendChild(img);
+            } else {
+              const dot = document.createElement('div');
+              dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:hsl(${(idNum*137)%360},80%,55%);`;
+              span.appendChild(dot);
+            }
+            if (n > 1) {
+              const c2 = document.createElement('span');
+              c2.className = 'count';
+              c2.textContent = n;
+              span.appendChild(c2);
+            }
+            div.appendChild(span);
+          }
+          div.dataset.tooltip = tip.join('\n');
+        } else if (center) {
+          div.dataset.tooltip = `(${x}, ${y})`;
+        }
+        frag.appendChild(div);
+      }
+    }
+    grid.appendChild(frag);
+    renderRouteArrows();
+  }
+
+  // Dessine les flèches du trajet par-dessus la grille via le SVG enfant
+  // de #grid. Trim chaque ligne de 12px de chaque côté pour que la flèche
+  // s'arrête au bord du cercle marker (et pas dedans). Cercle vert au
+  // départ, rouge à l'arrivée, bleus aux étapes intermédiaires.
+  function renderRouteArrows() {
+    routeSvg.innerHTML = '';
+    if (!activeRoute.waypoints.length) {
+      routeSvg.setAttribute('width', 0);
+      routeSvg.setAttribute('height', 0);
+      return;
+    }
+    const cellByCoord = new Map();
+    for (const cell of grid.querySelectorAll('.cell[data-x]')) {
+      cellByCoord.set(`${cell.dataset.x},${cell.dataset.y}`, cell);
+    }
+    const points = [];
+    for (const wp of activeRoute.waypoints) {
+      const cell = cellByCoord.get(`${wp.x},${wp.y}`);
+      if (!cell) { points.push(null); continue; }
+      points.push({
+        x: cell.offsetLeft + cell.offsetWidth / 2,
+        y: cell.offsetTop + cell.offsetHeight / 2,
+      });
+    }
+    const w = grid.scrollWidth;
+    const h = grid.scrollHeight;
+    routeSvg.setAttribute('width', w);
+    routeSvg.setAttribute('height', h);
+    routeSvg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    let svg = `<defs><marker id="arr-${Date.now()}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#1abc9c"/></marker></defs>`;
+    const markerId = svg.match(/id="(arr-\d+)"/)[1];
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i], b = points[i + 1];
+      if (!a || !b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 1) continue;
+      const nx = dx / d, ny = dy / d;
+      const trim = 12;
+      svg += `<line x1="${a.x + nx*trim}" y1="${a.y + ny*trim}" x2="${b.x - nx*trim}" y2="${b.y - ny*trim}" stroke="#1abc9c" stroke-width="3" stroke-linecap="round" marker-end="url(#${markerId})" opacity="0.9"/>`;
+    }
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (!p) continue;
+      let color, r;
+      if (i === 0) { color = '#2ecc71'; r = 9; }
+      else if (i === points.length - 1) { color = '#e74c3c'; r = 9; }
+      else { color = '#3498db'; r = 7; }
+      svg += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${color}" stroke="#fff" stroke-width="2.5"/>`;
+    }
+    routeSvg.innerHTML = svg;
+  }
+
+  function centerViewportOnCenter() {
+    // Scroll le container pour centrer la cellule (radius, radius) (= center)
+    const centerPx = 40 /*padding*/ + (radius + 0.5) * CELL_PITCH;
+    gridWrap.scrollLeft = centerPx - gridWrap.clientWidth / 2;
+    gridWrap.scrollTop  = centerPx - gridWrap.clientHeight / 2;
+  }
+
+  async function refresh() {
+    if (!centerMapId) {
+      setDiag(tr('noCurrentMap'));
+      renderGrid(null);
+      renderFilterBar(null);
+      statsEl.textContent = '';
+      return;
+    }
+    const data = await fetchGrid(centerMapId, radius);
+    lastData = data;
+    renderGrid(data);
+    renderFilterBar(data);
+    updateStats(data);
+  }
+
+  // Stats footer : indicateur de ce qui est chargé vs ce qui est affiché.
+  // Filtre vide = rien dessiné volontairement (UX dofusdb), donc on montre
+  // juste le nombre de cases chargées pour que l'user comprenne que la
+  // donnée est là, prête à être affichée dès qu'il sélectionne un filtre.
+  function updateStats(data) {
+    if (!data?.cells) { statsEl.textContent = ''; return; }
+    const withRes = data.cells.filter(c => c.details && Object.keys(c.details).length).length;
+    if (filterSet.size === 0) {
+      statsEl.textContent = tr('cellsWithResources', { n: withRes });
+      return;
+    }
+    const matching = data.cells.filter(c => {
+      if (!c.details) return false;
+      for (const id of Object.keys(c.details)) if (filterSet.has(+id)) return true;
+      return false;
+    }).length;
+    statsEl.textContent = tr('cellsShown', { n: matching, total: withRes });
+  }
+
+  // ─── Toolbar refresh ──────────────────────────────────────────────
+  function refreshLoadSelect() {
+    const names = Object.keys(routeStore).sort();
+    loadSel.innerHTML = '<option value="">' + tr('loadRoutePlaceholder') + '</option>' +
+      names.map(n => {
+        const safe = n.replace(/"/g, '&quot;');
+        const sel = n === activeRoute.name ? ' selected' : '';
+        return `<option value="${safe}"${sel}>${safe} (${(routeStore[n].waypoints || []).length})</option>`;
+      }).join('');
+  }
+  function refreshWpCount() { wpCount.textContent = activeRoute.waypoints.length; }
+
+  async function toggleWaypoint(x, y, mapId) {
+    const idx = activeRoute.waypoints.findIndex(w => w.x === x && w.y === y);
+    if (idx >= 0) activeRoute.waypoints.splice(idx, 1);
+    else activeRoute.waypoints.push({ x, y, mapId: mapId || null });
+    refreshWpCount();
+    if (lastData) renderGrid(lastData);
+    // Si un trajet est actif (nom + déjà sur le serveur), on autosave via HTTP.
+    if (activeRoute.name && routeStore[activeRoute.name]) {
+      const r = await apiSaveRoute(activeRoute.name, activeRoute.waypoints);
+      if (r?.route) { routeStore[activeRoute.name] = r.route; routesVersion = r.version; }
+    }
+  }
+
+  async function saveRoute() {
+    const name = (routeName.value || '').trim();
+    if (!name) { showToast(tr('nameTheRoute')); routeName.focus(); return; }
+    if (activeRoute.waypoints.length === 0) { showToast(tr('addOneStep')); return; }
+    const r = await apiSaveRoute(name, activeRoute.waypoints);
+    if (!r?.ok) { showToast(tr('serverErrSave')); return; }
+    routeStore[name] = r.route;
+    activeRoute.name = name;
+    routesVersion = r.version;
+    await apiSetActiveRoute(name);
+    refreshLoadSelect();
+    showToast(tr('routeSaved', { name, n: activeRoute.waypoints.length }));
+  }
+  async function loadRoute(name) {
+    if (!name || !routeStore[name]) return;
+    activeRoute = { name, waypoints: [...(routeStore[name].waypoints || [])] };
+    routeName.value = name;
+    const r = await apiSetActiveRoute(name);
+    if (r?.version) routesVersion = r.version;
+    refreshWpCount();
+    if (lastData) renderGrid(lastData);
+    showToast(tr('routeLoadedShort', { name }));
+  }
+  async function deleteRoute() {
+    const name = activeRoute.name || routeName.value.trim();
+    if (!name || !routeStore[name]) { showToast(tr('noRouteToDelete')); return; }
+    if (!confirm(tr('confirmDeleteRoute', { name }))) return;
+    const r = await apiDeleteRoute(name);
+    if (!r?.ok) { showToast(tr('serverErrDelete')); return; }
+    delete routeStore[name];
+    activeRoute = { name: '', waypoints: [] };
+    routeName.value = '';
+    routesVersion = r.version;
+    refreshLoadSelect();
+    refreshWpCount();
+    if (lastData) renderGrid(lastData);
+    showToast(tr('routeDeleted', { name }));
+  }
+  async function clearWaypoints() {
+    if (activeRoute.waypoints.length === 0) return;
+    activeRoute.waypoints = [];
+    refreshWpCount();
+    if (lastData) renderGrid(lastData);
+    if (activeRoute.name && routeStore[activeRoute.name]) {
+      const r = await apiSaveRoute(activeRoute.name, []);
+      if (r?.route) { routeStore[activeRoute.name] = r.route; routesVersion = r.version; }
+    }
+  }
+  async function recenterOnPlayer() {
+    const state = await fetchMapState();
+    if (!state?.mapId) { showToast(tr('noPlayerPos')); return; }
+    playerMapId = state.mapId;
+    centerMapId = state.mapId;
+    try { localStorage.setItem(PLANNER_CENTER, String(centerMapId)); } catch {}
+    gridCache.clear();
+    await refresh();
+    requestAnimationFrame(centerViewportOnCenter);
+  }
+  function setRadius(r) {
+    radius = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, r));
+    radiusLabel.textContent = radius;
+    try { localStorage.setItem(PLANNER_RADIUS, String(radius)); } catch {}
+    gridCache.clear();
+    refresh().then(() => requestAnimationFrame(centerViewportOnCenter));
+  }
+
+  // ─── Events ───────────────────────────────────────────────────────
+  // Click sur une cellule = toggle waypoint. Drag threshold : si l'user a
+  // bougé > DRAG_THRESHOLD px entre mousedown et mouseup, on ne toggle pas
+  // (c'était un pan, pas un click).
+  let mousedownPos = null;
+  gridWrap.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    mousedownPos = { x: e.clientX, y: e.clientY };
+  });
+  gridWrap.addEventListener('click', (e) => {
+    if (!mousedownPos) return;
+    const moved = Math.hypot(e.clientX - mousedownPos.x, e.clientY - mousedownPos.y);
+    mousedownPos = null;
+    if (moved > DRAG_THRESHOLD) return; // c'était un drag
+    const cell = e.target.closest('.cell');
+    if (!cell || cell.dataset.x === undefined) return;
+    if (cell.classList.contains('no-map')) {
+      showToast(tr('noMapHere'));
+      return;
+    }
+    const x = parseInt(cell.dataset.x, 10);
+    const y = parseInt(cell.dataset.y, 10);
+    const mapId = cell.dataset.mapId ? parseInt(cell.dataset.mapId, 10) : null;
+    toggleWaypoint(x, y, mapId);
+  });
+
+  // Drag-to-pan sur le gridWrap. Pointer events mais on NE PAS capturer au
+  // pointerdown — setPointerCapture redirigerait TOUS les events (y compris
+  // le click qui suit) vers gridWrap, donc e.target.closest('.cell') du
+  // click handler renverrait null et le click ne ferait rien. On ne capture
+  // qu'à partir du moment où le drag est confirmé (move > threshold), pour
+  // laisser les simples clicks atteindre leur cellule naturellement.
+  let dragState = null;
+  gridWrap.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.pointerType === 'touch') return;
+    dragState = {
+      pointerId: e.pointerId,
+      startX: e.clientX, startY: e.clientY,
+      scrollX: gridWrap.scrollLeft, scrollY: gridWrap.scrollTop,
+      moved: false,
+    };
+  });
+  gridWrap.addEventListener('pointermove', (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    if (!dragState.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+      dragState.moved = true;
+      gridWrap.classList.add('dragging');
+      hideTooltip();
+      // Capture MAINTENANT que le drag est confirmé : garantit qu'on garde
+      // les pointermove/up même si la souris sort de gridWrap pendant le pan.
+      try { gridWrap.setPointerCapture(e.pointerId); } catch {}
+    }
+    if (dragState.moved) {
+      gridWrap.scrollLeft = dragState.scrollX - dx;
+      gridWrap.scrollTop  = dragState.scrollY - dy;
+    }
+  });
+  function endDrag(e) {
+    if (!dragState || (e && e.pointerId !== dragState.pointerId)) return;
+    if (dragState.moved) { try { gridWrap.releasePointerCapture(dragState.pointerId); } catch {} }
+    gridWrap.classList.remove('dragging');
+    dragState = null;
+  }
+  gridWrap.addEventListener('pointerup', endDrag);
+  gridWrap.addEventListener('pointercancel', endDrag);
+  gridWrap.addEventListener('dragstart', (e) => e.preventDefault());
+
+  // Tooltip
+  function hideTooltip() { tooltip.style.display = 'none'; }
+  let hoveredCell = null;
+  gridWrap.addEventListener('mousemove', (e) => {
+    const cell = e.target.closest('.cell');
+    if (!cell || !cell.dataset.tooltip) { hideTooltip(); return; }
+    if (cell !== hoveredCell) {
+      hoveredCell = cell;
+      tooltip.textContent = cell.dataset.tooltip;
+      tooltip.style.display = 'block';
+    }
+    tooltip.style.left = Math.min(window.innerWidth - 280, e.clientX + 14) + 'px';
+    tooltip.style.top  = Math.min(window.innerHeight - 120, e.clientY + 14) + 'px';
+  });
+  gridWrap.addEventListener('mouseleave', hideTooltip);
+
+  // Toolbar buttons
+  saveBtn.addEventListener('click', saveRoute);
+  deleteBtn.addEventListener('click', deleteRoute);
+  clearBtn.addEventListener('click', clearWaypoints);
+  recenterBtn.addEventListener('click', recenterOnPlayer);
+  function updateFollowBtn() {
+    followBtn.classList.toggle('on', followPlayer);
+    // On ne réécrit QUE le span label pour pas détruire l'<svg> au milieu
+    // du bouton (sinon il faut recomposer le markup à chaque toggle).
+    const label = followBtn.querySelector('span');
+    if (label) label.textContent = followPlayer ? 'Suivre (actif)' : 'Suivre';
+  }
+  followBtn.addEventListener('click', () => {
+    followPlayer = !followPlayer;
+    try { localStorage.setItem(PLANNER_FOLLOW, String(followPlayer)); } catch {}
+    updateFollowBtn();
+    if (followPlayer) recenterOnPlayer();
+  });
+  updateFollowBtn();
+  radiusInc.addEventListener('click', () => setRadius(radius + RADIUS_STEP));
+  radiusDec.addEventListener('click', () => setRadius(radius - RADIUS_STEP));
+  loadSel.addEventListener('change', () => {
+    if (loadSel.value) loadRoute(loadSel.value);
+  });
+  routeName.addEventListener('input', () => {
+    activeRoute.name = routeName.value.trim();
+  });
+  routeName.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveRoute();
+  });
+
+  // Hotkeys globaux (sauf dans les inputs)
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === '+' || e.key === '=') { setRadius(radius + RADIUS_STEP); e.preventDefault(); }
+    else if (e.key === '-' || e.key === '_') { setRadius(radius - RADIUS_STEP); e.preventDefault(); }
+  });
+
+  // (Pas de storage listener : sync cross-client se fait via le poll
+  // /api/overlay/routes + comparison de version, cf. setInterval plus bas.)
+
+  // ─── Init ─────────────────────────────────────────────────────────
+  radiusLabel.textContent = radius;
+  routeName.value = activeRoute.name || '';
+  refreshLoadSelect();
+  refreshWpCount();
+
+  // Migration one-shot : si l'user avait des trajets en localStorage (ancien
+  // comportement), on les POST au serveur puis on efface les clés legacy.
+  async function migrateLegacyRoutes() {
+    let legacyStore = null;
+    let legacyActive = '';
+    try { legacyStore = JSON.parse(localStorage.getItem(LEGACY_ROUTES_KEY) || 'null'); } catch {}
+    try { legacyActive = localStorage.getItem(LEGACY_ACTIVE_ROUTE_KEY) || ''; } catch {}
+    if (!legacyStore || typeof legacyStore !== 'object' || Object.keys(legacyStore).length === 0) return;
+    showToast(tr('migrating', { n: Object.keys(legacyStore).length }));
+    for (const [name, entry] of Object.entries(legacyStore)) {
+      if (!entry || !Array.isArray(entry.waypoints)) continue;
+      await apiSaveRoute(name, entry.waypoints);
+    }
+    if (legacyActive) await apiSetActiveRoute(legacyActive);
+    try { localStorage.removeItem(LEGACY_ROUTES_KEY); } catch {}
+    try { localStorage.removeItem(LEGACY_ACTIVE_ROUTE_KEY); } catch {}
+  }
+
+  // Langue : peinture immédiate avec la langue en cache, puis sync serveur
+  // (poll : l'utilisateur peut changer de langue pendant que le planner est
+  // ouvert). Chaque changement repeint les libellés et les noms d'items.
+  applyStaticI18n();
+  I18N.onChange(() => {
+    applyStaticI18n();
+    refreshLoadSelect();
+    if (lastData) { renderGrid(lastData); renderFilterBar(lastData); updateStats(lastData); }
+  });
+  I18N.autoSync(STAKK_URL, 5000);
+
+  (async () => {
+    // 1. Charger les trajets depuis le serveur
+    const rs = await apiFetchRoutes();
+    if (rs) applyRoutesState(rs);
+    // 2. Migration legacy localStorage (one-shot, no-op si rien à migrer)
+    await migrateLegacyRoutes();
+    // 3. Re-fetch après migration pour picker les nouveaux
+    const rs2 = await apiFetchRoutes();
+    if (rs2) applyRoutesState(rs2);
+    refreshLoadSelect();
+    refreshWpCount();
+
+    // Priorité : position courante du joueur > dernier cache planner. Le
+    // cache peut être une map d'une session précédente où le joueur
+    // jouait ailleurs — partir du cache causait « rien ne s'affiche sur
+    // ma map actuelle » parce qu'on centrait sur une map obsolète.
+    const state = await fetchMapState();
+    if (state?.mapId) {
+      playerMapId = state.mapId;
+      centerMapId = state.mapId;
+      try { localStorage.setItem(PLANNER_CENTER, String(centerMapId)); } catch {}
+    } else {
+      try { centerMapId = parseInt(localStorage.getItem(PLANNER_CENTER) || '', 10) || null; } catch {}
+    }
+    if (centerMapId) {
+      await refresh();
+      requestAnimationFrame(centerViewportOnCenter);
+    } else {
+      setDiag(tr('launchGameHint'));
+    }
+    // Poll périodique : si followPlayer est ON et que le joueur change de
+    // map, on re-centre automatiquement. Skip si un drag est en cours pour
+    // pas interrompre le pan manuel. L'user toggle 🧭 pour désactiver le
+    // follow s'il veut planifier une zone distante sans être tiré dessus.
+    setInterval(async () => {
+      const s = await fetchMapState();
+      if (!s?.mapId) return;
+      const changed = s.mapId !== playerMapId;
+      playerMapId = s.mapId;
+      if (followPlayer && changed && s.mapId !== centerMapId && !dragState) {
+        centerMapId = s.mapId;
+        try { localStorage.setItem(PLANNER_CENTER, String(centerMapId)); } catch {}
+        gridCache.clear();
+        await refresh();
+        requestAnimationFrame(centerViewportOnCenter);
+      }
+    }, 2000);
+
+    // Poll des routes serveur : si un autre onglet (autre planner, ou
+    // l'overlay) a modifié/ajouté des trajets, le `version` incrémenté
+    // nous signale qu'il faut re-sync. Cheap, réponse ~<1KB.
+    setInterval(async () => {
+      const rs = await apiFetchRoutes();
+      if (!rs) return;
+      if (rs.version !== routesVersion) {
+        applyRoutesState(rs);
+        refreshLoadSelect();
+        refreshWpCount();
+      }
+    }, 3000);
+  })();
+</script>
+</body>
+</html>

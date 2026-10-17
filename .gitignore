@@ -1,0 +1,20 @@
+node_modules/
+release/
+dist/
+dist-mac-arm64/
+dist-mac-x64/
+cache/
+mac-prebuilds/
+mac-frida/node_modules/
+*.log
+config.json
+*.exe
+*.zip
+
+# Plugins et sélection propres à chaque installation.
+/plugins/
+/plugins.json
+
+# Helper natif macOS : binaire compilé depuis mac-helper/keytap.swift.
+# Recompilé au build (swiftc), jamais versionné.
+mac-helper/keytap

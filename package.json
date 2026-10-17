@@ -1,0 +1,44 @@
+{
+  "name": "stakk",
+  "version": "1.4.29",
+  "description": "STAKK — Multi-compte Dofus 3 / Retro / Wakfu",
+  "license": "GPL-3.0-only",
+  "main": "index.js",
+  "bin": "index.js",
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test/fm-engine.test.js && node test/fm-weights.test.js && node test/frida-agent.test.js && node test/frida-connect.test.js && node test/protocol-learn.test.js && node test/protocol-elector.test.js && node test/protocol-store.test.js && node test/fm-protocol.test.js && node test/fm-live.test.js && node test/fm-plugin.test.js && node test/dofus-schema.test.js && node test/dofus-noms.test.js && node test/monde.test.js && node test/chasse-indices.test.js && node test/chasse-distance.test.js && node test/chasse-etape.test.js && node test/chasse-protocol.test.js && node test/chasse-plugin.test.js && node test/overlay-electron.test.js && node test/overlay-sidecars.test.js && node test/overlay-chasse.test.js && node test/overlay-chasse-compte.test.js && node test/overlay-chasse-copie.test.js && node test/web-chasse.test.js && node test/i18n-chasse.test.js && node test/key-refresh.test.js && node test/oauth-registre.test.js && node test/web-jeu-memorise.test.js && node test/plugins-loader.test.js",
+    "test:fm:ui": "node test/fm-ui.e2e.js",
+    "build": "node build.js",
+    "build:mac": "node build-mac.js",
+    "build:mac:cross": "node build-mac-cross.js both",
+    "overlay": "electron overlay/main.js"
+  },
+  "dependencies": {
+    "frida": "^15.1.25",
+    "png2icons": "^2.0.1",
+    "puppeteer-core": "^24.40.0",
+    "socks": "^2.7.1",
+    "uuid": "^8.3.2"
+  },
+  "pkg": {
+    "assets": [
+      "lib/**/*"
+    ],
+    "outputPath": "dist",
+    "targets": [
+      "node18-win-x64"
+    ]
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.4",
+    "electron": "^33.4.11",
+    "pkg": "^5.8.1",
+    "png-to-ico": "^2.1.8",
+    "rcedit": "^4.0.1"
+  },
+  "_pkgNote": "pkg en devDep pour pinner la version utilisée par build-mac-cross.js. Usage: npm run build:mac:cross"
+}

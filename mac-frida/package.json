@@ -1,0 +1,9 @@
+{
+  "name": "stakk-mac-frida",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Frida 17 isolé pour le build Mac (le client principal reste sur frida 15 pour compat Windows)",
+  "dependencies": {
+    "frida": "17.9.1"
+  }
+}
