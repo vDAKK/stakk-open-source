@@ -81,19 +81,27 @@ function finishBuild() {
 
   // 5. Copier les fichiers natifs
   console.log('[build] Copie des fichiers natifs...');
+  // `srcs` : emplacements candidats, le premier trouvé gagne. Frida vient de
+  // node_modules (npm ci en CI) ; release/Release est l'ancien emplacement
+  // local. `required` : sans lui stakk.exe démarre mais ne lance aucun jeu
+  // (« Could not locate the bindings file ») — le build doit échouer.
   const nativeFiles = [
-    { src: 'release/Release/frida_binding.node', dst: 'frida_binding.node' },
-    { src: 'release/binding-v6.0.1-n-api-win32-x64/lzma_native.node', dst: 'lzma_native.node' },
-    { src: 'release/binding-v6.0.1-n-api-win32-x64/liblzma.dll', dst: 'liblzma.dll' },
+    { srcs: ['node_modules/frida/build/Release/frida_binding.node', 'release/Release/frida_binding.node'], dst: 'frida_binding.node', required: true },
+    { srcs: ['release/binding-v6.0.1-n-api-win32-x64/lzma_native.node'], dst: 'lzma_native.node' },
+    { srcs: ['release/binding-v6.0.1-n-api-win32-x64/liblzma.dll'], dst: 'liblzma.dll' },
   ];
 
   for (const f of nativeFiles) {
-    const src = path.join(__dirname, f.src);
-    const dst = path.join(DIST, f.dst);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, dst);
-      console.log(`  ${f.dst}`);
+    const src = f.srcs.map(s => path.join(__dirname, s)).find(s => fs.existsSync(s));
+    if (!src) {
+      if (f.required) {
+        console.error(`[build] ${f.dst} introuvable (cherché : ${f.srcs.join(', ')})`);
+        process.exit(1);
+      }
+      continue;
     }
+    fs.copyFileSync(src, path.join(DIST, f.dst));
+    console.log(`  ${f.dst}`);
   }
 
   // 5b. Bundle Electron pour le sidecar overlay. ~270 MB. pkg ne peut pas

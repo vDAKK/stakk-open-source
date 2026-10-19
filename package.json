@@ -1,6 +1,6 @@
 {
   "name": "stakk",
-  "version": "1.4.29",
+  "version": "1.4.30",
   "description": "STAKK — Multi-compte Dofus 3 / Retro / Wakfu",
   "license": "GPL-3.0-only",
   "main": "index.js",
