@@ -3938,7 +3938,7 @@ onGameChange({ persist: false });
 
 refreshAll();syncGameOptions();renderStatic();pushLangToOverlay(lang);showVersion();setInterval(pollLogs,2000);setTimeout(pollLogs,500);
 // Poll running state every 3 seconds
-setInterval(async()=>{try{const fresh=await api('GET','accounts');const changed=A.some((a,i)=>a.running!==fresh[i]?.running);if(changed){A=fresh;renderList();renderDet();
+setInterval(async()=>{try{const fresh=await api('GET','accounts');const changed=fresh.length!==A.length||A.some((a,i)=>a.running!==fresh[i]?.running);if(changed){A=fresh;renderList();renderDet();
   // Un lancement vient de se produire → le plugin sub-tracker fetch HAAPI en
   // arrière-plan. On refresh SUBS 4s plus tard pour laisser le temps au fetch.
   setTimeout(async()=>{try{SUBS=await api('GET','account-subs')||SUBS;renderDet()}catch{}},4000);
