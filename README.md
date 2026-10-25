@@ -1,6 +1,18 @@
-# STAKK
+<p align="center">
+  <img src="stakk-logo.png" alt="STAKK" width="180">
+</p>
+
+<h1 align="center">STAKK</h1>
+
+<p align="center">
+  <a href="https://github.com/vDAKK/stakk-open-source/releases/latest"><img src="https://img.shields.io/github/v/release/vDAKK/stakk-open-source?label=release&color=1abc9c" alt="Dernière release"></a>
+  <img src="https://img.shields.io/badge/plateforme-Windows%20%7C%20macOS-1abc9c" alt="Windows | macOS">
+  <img src="https://img.shields.io/badge/licence-GPL--3.0-1abc9c" alt="GPL-3.0">
+</p>
 
 Lanceur multi-compte pour **Dofus 3**, **Dofus Retro** et **Wakfu**, avec overlay, forgemagie automatique, aide à la chasse au trésor et système de plugins.
+
+![Vue Compte : liste des comptes, détail, overlays et almanax du jour](docs/screenshots/comptes.png)
 
 STAKK tourne entièrement en local : pas de compte, pas d'abonnement, pas de serveur tiers. L'exe démarre une petite API sur `http://localhost:3000` et ouvre l'interface dans ton navigateur.
 
@@ -15,6 +27,24 @@ STAKK tourne entièrement en local : pas de compte, pas d'abonnement, pas de ser
 - **Overlay** ressources et planner de trajet, **overlay chasse au trésor**.
 - **Forgemagie** automatique.
 - **Almanax**, suivi des abonnements Ankama, **Dofus Touch** (miroir Android via WebUSB).
+
+## Captures
+
+| Forgemagie | Réseau |
+|---|---|
+| ![Forgemagie : objectifs par stat, runes et poids](docs/screenshots/forgemagie.png) | ![Groupes réseau : IP par défaut ou proxy SOCKS5, par jeu](docs/screenshots/reseau.png) |
+
+![Almanax : calendrier du mois, filtres et récap des ressources](docs/screenshots/almanax.png)
+
+### Overlays
+
+Fenêtres transparentes posées par-dessus le jeu.
+
+| Ressources (5×5 autour du perso) | Chasse au trésor |
+|---|---|
+| <img src="docs/screenshots/overlay-ressources.png" alt="Overlay ressources : ressources récoltables sur la map et les maps adjacentes" width="420"> | <img src="docs/screenshots/overlay-chasse.png" alt="Overlay chasse : direction, nombre de cartes et coordonnées de l'indice" width="260"><br><br><img src="docs/screenshots/overlay-chasse-phorreur.png" alt="Overlay chasse : phorreur repéré sur la carte" width="260"><br><sub>Indice suivant, puis phorreur repéré sur la carte.</sub> |
+
+<sub>Captures prises avec des comptes fictifs et une chasse simulée ; les ressources viennent de dofusdb.</sub>
 
 ## Démarrage rapide
 
