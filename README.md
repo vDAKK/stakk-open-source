@@ -44,8 +44,6 @@ Fenêtres transparentes posées par-dessus le jeu.
 |---|---|
 | <img src="docs/screenshots/overlay-ressources.png" alt="Overlay ressources : ressources récoltables sur la map et les maps adjacentes" width="420"> | <img src="docs/screenshots/overlay-chasse.png" alt="Overlay chasse : direction, nombre de cartes et coordonnées de l'indice" width="260"><br><br><img src="docs/screenshots/overlay-chasse-phorreur.png" alt="Overlay chasse : phorreur repéré sur la carte" width="260"><br><sub>Indice suivant, puis phorreur repéré sur la carte.</sub> |
 
-<sub>Captures prises avec des comptes fictifs et une chasse simulée ; les ressources viennent de dofusdb.</sub>
-
 ## Démarrage rapide
 
 ### Depuis une release (Windows)
